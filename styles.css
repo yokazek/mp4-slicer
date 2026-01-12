@@ -1,0 +1,972 @@
+/* ============================================
+   mp4 Slicer - スタイルシート
+   Enhanced Glassmorphism + Modern Design
+   ============================================ */
+
+/* CSS変数 - カラー設定 (ここで一括管理) */
+:root {
+    /* --- ダークモード用カラー --- */
+    --dark-bg-deep: #08080f;
+    --dark-bg-primary: #0d0d18;
+    --dark-bg-secondary: #161625;
+    --dark-bg-tertiary: #1e1e32;
+    --dark-bg-glass: rgba(255, 255, 255, 0.03);
+    --dark-bg-glass-strong: rgba(255, 255, 255, 0.06);
+    --dark-border-glass: rgba(255, 255, 255, 0.08);
+    --dark-border-glass-light: rgba(255, 255, 255, 0.12);
+    --dark-text-primary: #f0f0f5;
+    --dark-text-secondary: #9898a8;
+    --dark-text-muted: #5a5a6a;
+    --dark-shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.3);
+    --dark-shadow-glow: 0 0 40px rgba(124, 58, 237, 0.25);
+
+    /* --- ライトモード用カラー --- */
+    --light-bg-deep: #f5f5f7;
+    --light-bg-primary: #ffffff;
+    --light-bg-secondary: #f0f0f2;
+    --light-bg-tertiary: #e8e8ec;
+    --light-bg-glass: rgba(255, 255, 255, 0.7);
+    --light-bg-glass-strong: rgba(255, 255, 255, 0.85);
+    --light-border-glass: rgba(0, 0, 0, 0.08);
+    --light-border-glass-light: rgba(0, 0, 0, 0.12);
+    --light-text-primary: #1a1a2e;
+    --light-text-secondary: #4a4a5a;
+    --light-text-muted: #8a8a9a;
+    --light-shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.08);
+    --light-shadow-glow: 0 0 40px rgba(124, 58, 237, 0.15);
+
+    /* --- 共通アクセントカラー --- */
+    --accent-primary: #FBBC04;
+    --accent-secondary: #E37400;
+    --accent-success: #4285F4;
+
+    /* --- その他共通設定 --- */
+    --blur-glass: blur(20px);
+    --radius-sm: 8px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
+    --radius-xl: 28px;
+    --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* --- 現在のテーマ設定 (デフォルト: ダーク) --- */
+    --bg-deep: var(--dark-bg-deep);
+    --bg-primary: var(--dark-bg-primary);
+    --bg-secondary: var(--dark-bg-secondary);
+    --bg-tertiary: var(--dark-bg-tertiary);
+    --bg-glass: var(--dark-bg-glass);
+    --bg-glass-strong: var(--dark-bg-glass-strong);
+    --border-glass: var(--dark-border-glass);
+    --border-glass-light: var(--dark-border-glass-light);
+    --text-primary: var(--dark-text-primary);
+    --text-secondary: var(--dark-text-secondary);
+    --text-muted: var(--dark-text-muted);
+    --shadow-soft: var(--dark-shadow-soft);
+    --shadow-glow: var(--dark-shadow-glow);
+}
+
+/* ライトモード設定 */
+[data-theme="light"] {
+    --bg-deep: var(--light-bg-deep);
+    --bg-primary: var(--light-bg-primary);
+    --bg-secondary: var(--light-bg-secondary);
+    --bg-tertiary: var(--light-bg-tertiary);
+    --bg-glass: var(--light-bg-glass);
+    --bg-glass-strong: var(--light-bg-glass-strong);
+    --border-glass: var(--light-border-glass);
+    --border-glass-light: var(--light-border-glass-light);
+    --text-primary: var(--light-text-primary);
+    --text-secondary: var(--light-text-secondary);
+    --text-muted: var(--light-text-muted);
+    --shadow-soft: var(--light-shadow-soft);
+    --shadow-glow: var(--light-shadow-glow);
+}
+
+/* リセット */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* アプリコンテナ */
+.app-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem;
+}
+
+/* ヘッダー */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2.5rem;
+}
+
+.header-content {
+    text-align: left;
+}
+
+.header h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.icon-header {
+    width: 32px;
+    height: 32px;
+    stroke: var(--accent-primary);
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+}
+
+/* テーマ切り替え */
+.theme-toggle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.btn-theme {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--bg-glass-strong);
+    backdrop-filter: var(--blur-glass);
+    border: 1px solid var(--border-glass-light);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+}
+
+.btn-theme:hover {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+
+.btn-theme:hover .theme-icon {
+    stroke: white;
+}
+
+.theme-icon {
+    width: 20px;
+    height: 20px;
+    stroke: var(--text-primary);
+    display: none;
+}
+
+.theme-icon.active {
+    display: block;
+}
+
+.theme-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* アイコンスタイル */
+.icon-section {
+    width: 18px;
+    height: 18px;
+    stroke: var(--accent-secondary);
+    vertical-align: middle;
+    margin-right: 0.5rem;
+}
+
+.icon-inline {
+    width: 14px;
+    height: 14px;
+    stroke: var(--text-secondary);
+    vertical-align: middle;
+}
+
+.icon-btn {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    vertical-align: middle;
+    margin-right: 0.4rem;
+}
+
+.drop-icon {
+    width: 64px;
+    height: 64px;
+    stroke: var(--accent-secondary);
+    stroke-width: 1.5;
+    margin-bottom: 1rem;
+}
+
+/* アップロードセクション */
+.upload-section {
+    margin-bottom: 2rem;
+}
+
+.drop-zone {
+    background: var(--bg-glass);
+    backdrop-filter: blur(10px);
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    /* ダークモードで見やすく明るく */
+    border-radius: var(--radius-lg);
+    padding: 4rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+[data-theme="light"] .drop-zone {
+    border-color: var(--border-glass);
+}
+
+.drop-zone:hover,
+.drop-zone.drag-over {
+    border-color: var(--accent-primary);
+    background: rgba(251, 188, 4, 0.1);
+    box-shadow: 0 0 20px rgba(251, 188, 4, 0.2);
+}
+
+.drop-icon {
+    font-size: 4rem;
+    display: block;
+    margin-bottom: 1rem;
+}
+
+.drop-zone p {
+    font-size: 1.2rem;
+    color: var(--text-primary);
+}
+
+.drop-hint {
+    color: var(--text-muted) !important;
+    font-size: 0.9rem !important;
+    margin-top: 0.5rem;
+}
+
+/* エディタセクション */
+.editor-section {
+    margin-bottom: 2rem;
+}
+
+.editor-header {
+    margin-bottom: 1rem;
+}
+
+.btn-change-video {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-glass);
+    color: var(--text-secondary);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-change-video:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
+}
+
+.editor-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+@media (max-width: 1024px) {
+    .editor-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* 動画エリア */
+.video-area {
+    background: var(--bg-glass);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+}
+
+.video-container {
+    position: relative;
+    background: transparent;
+    /* 黒い縁が出るのを防ぐため透明に */
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    transition: var(--transition);
+}
+
+.video-container.drag-over {
+    outline: 3px dashed var(--accent-primary);
+    outline-offset: -3px;
+}
+
+#video-player {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+#crop-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+}
+
+/* 動画コンテナ内のドロップゾーン */
+.video-drop-zone {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-glass);
+    backdrop-filter: blur(5px);
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+    z-index: 20;
+}
+
+[data-theme="light"] .video-drop-zone {
+    border-color: var(--accent-primary);
+}
+
+.video-drop-zone:hover,
+.video-drop-zone.drag-over {
+    border-color: var(--accent-primary);
+    background: rgba(251, 188, 4, 0.15);
+}
+
+.video-drop-zone.hidden {
+    display: none;
+}
+
+.video-drop-zone .drop-icon {
+    font-size: 3rem;
+    margin-bottom: 0.75rem;
+}
+
+.video-drop-zone p {
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.video-drop-zone .drop-hint {
+    color: var(--text-muted) !important;
+    font-size: 0.85rem !important;
+    margin-top: 0.25rem;
+}
+
+/* 再アップロードボタン（動画読み込み後） */
+.btn-reload-video {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 40px;
+    height: 40px;
+    background: var(--accent-secondary);
+    border: 1px solid var(--border-glass);
+    border-radius: 50%;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: var(--transition);
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+}
+
+.btn-reload-video:hover {
+    background: var(--accent-primary);
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.btn-reload-video.hidden {
+    display: none;
+}
+
+/* 時間範囲コントロール */
+.time-range-container {
+    margin-top: 1rem;
+}
+
+.time-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    font-family: monospace;
+}
+
+.range-slider-container {
+    padding: 0.5rem 0;
+}
+
+.range-track {
+    position: relative;
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.range-selected {
+    position: absolute;
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+    border-radius: 4px;
+    pointer-events: none;
+}
+
+.range-handle {
+    position: absolute;
+    top: 50%;
+    width: 18px;
+    height: 18px;
+    background: var(--text-primary);
+    border: 3px solid var(--accent-primary);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    z-index: 10;
+}
+
+.range-handle:hover,
+.range-handle:active {
+    transform: translate(-50%, -50%) scale(1.2);
+    box-shadow: 0 0 10px var(--accent-primary);
+}
+
+.range-handle:active {
+    cursor: grabbing;
+}
+
+.playback-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.btn-icon {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-glass);
+    color: var(--text-primary);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: var(--transition);
+}
+
+.btn-icon:hover {
+    background: var(--accent-primary);
+}
+
+#playback-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+#playback-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent-primary);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+/* 設定パネル */
+.settings-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.settings-group {
+    background: var(--bg-glass-strong);
+    backdrop-filter: var(--blur-glass);
+    -webkit-backdrop-filter: var(--blur-glass);
+    border: 1px solid var(--border-glass-light);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.5rem;
+    transition: var(--transition);
+}
+
+.settings-group:hover {
+    border-color: rgba(124, 58, 237, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.settings-group h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+}
+
+/* 入力フィールド */
+.crop-inputs,
+.time-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.input-row {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.input-row label,
+.time-inputs label {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+input[type="number"],
+input[type="text"],
+select {
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.75rem;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    transition: var(--transition);
+}
+
+input[type="number"]:focus,
+input[type="text"]:focus,
+select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(251, 188, 4, 0.2);
+}
+
+select {
+    cursor: pointer;
+}
+
+.aspect-ratio-container {
+    margin-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.aspect-ratio-container label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.aspect-ratio-container select {
+    flex: 1;
+    min-width: 120px;
+}
+
+.custom-ratio {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    margin-top: 0.5rem;
+}
+
+.custom-ratio input {
+    width: 60px;
+    text-align: center;
+}
+
+.custom-ratio span {
+    color: var(--text-secondary);
+}
+
+/* 間隔コンテナ */
+.interval-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.interval-container input {
+    width: 100px;
+}
+
+.interval-container span {
+    color: var(--text-secondary);
+}
+
+.info-text {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 0.75rem;
+}
+
+/* ボタン */
+.btn-primary,
+.btn-secondary,
+.btn-success {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    width: 100%;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-glow);
+}
+
+.btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-glass);
+    margin-top: 0.75rem;
+}
+
+.btn-secondary:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.btn-success {
+    background: var(--accent-success);
+    color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 0 30px rgba(16, 185, 129, 0.3);
+}
+
+.btn-success:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* プレビューセクション */
+.preview-section {
+    background: var(--bg-glass);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+}
+
+.preview-section h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+#preview-count {
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.preview-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+.preview-gallery::-webkit-scrollbar {
+    width: 8px;
+}
+
+.preview-gallery::-webkit-scrollbar-track {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+.preview-gallery::-webkit-scrollbar-thumb {
+    background: var(--accent-primary);
+    border-radius: 4px;
+}
+
+.preview-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+}
+
+.preview-item {
+    position: relative;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    aspect-ratio: 1;
+    background: var(--bg-tertiary);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.preview-item:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(251, 188, 4, 0.4);
+}
+
+.preview-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.preview-item .frame-label {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    text-align: center;
+}
+
+/* 実サイズ表示モーダル */
+.image-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(5px);
+}
+
+.modal-content {
+    position: relative;
+    max-width: 95vw;
+    max-height: 95vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.modal-close {
+    position: absolute;
+    top: -40px;
+    right: 0;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-glass);
+    color: var(--text-primary);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: var(--transition);
+    z-index: 10;
+}
+
+.modal-close:hover {
+    background: var(--accent-primary);
+}
+
+#modal-image {
+    max-width: 95vw;
+    max-height: 85vh;
+    object-fit: contain;
+    border-radius: var(--radius-md);
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+}
+
+.modal-info {
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    background: var(--bg-glass);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+}
+
+/* モーダルナビゲーションボタン */
+.modal-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-glass);
+    color: var(--text-primary);
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: var(--transition);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-nav:hover {
+    background: var(--accent-primary);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.modal-prev {
+    left: -70px;
+}
+
+.modal-next {
+    right: -70px;
+}
+
+@media (max-width: 768px) {
+    .modal-prev {
+        left: 10px;
+    }
+
+    .modal-next {
+        right: 10px;
+    }
+}
+
+/* プログレスバー */
+.progress-container {
+    margin-top: 1.5rem;
+}
+
+.progress-bar {
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+#progress-text {
+    text-align: center;
+    margin-top: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/* ユーティリティ */
+.hidden {
+    display: none !important;
+}
+
+/* アニメーション */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.editor-section:not(.hidden),
+.preview-section:not(.hidden) {
+    animation: fadeIn 0.4s ease;
+}

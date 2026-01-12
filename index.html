@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mp4 Slicer</title>
+    <meta name="description" content="mp4動画からPNGフレームを抽出するWebツール。クロップ、間隔指定、プレビュー機能付き。">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- ヘッダー -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i data-lucide="film" class="icon-header"></i> mp4 Slicer</h1>
+                <p class="subtitle">動画からフレームを抽出してPNGに変換</p>
+            </div>
+            <div class="theme-toggle">
+                <button id="btn-theme" class="btn-theme" title="テーマ切り替え">
+                    <i data-lucide="sun" id="icon-light" class="theme-icon"></i>
+                    <i data-lucide="moon" id="icon-dark" class="theme-icon"></i>
+                </button>
+                <span id="theme-label" class="theme-label">ダーク</span>
+            </div>
+        </header>
+
+        <!-- 統合エディタ（常時表示） -->
+        <section id="editor-section" class="editor-section">
+            <div class="editor-layout">
+                <!-- 左側：動画プレビュー + クロップ -->
+                <div class="video-area">
+                    <div class="video-container" id="video-container">
+                        <video id="video-player" muted></video>
+                        <canvas id="crop-overlay"></canvas>
+                        <!-- 動画未読み込み時のドロップゾーン -->
+                        <div id="video-drop-zone" class="video-drop-zone">
+                            <div class="drop-zone-content">
+                                <i data-lucide="upload" class="drop-icon"></i>
+                                <p>mp4をドラッグ＆ドロップ</p>
+                                <p class="drop-hint">または クリックして選択</p>
+                            </div>
+                        </div>
+                        <!-- 動画読み込み後の再アップロードボタン -->
+                        <button id="btn-reload-video" class="btn-reload-video hidden" title="別の動画を選択">
+                            <i data-lucide="folder-open"></i>
+                        </button>
+                    </div>
+                    <input type="file" id="file-input" accept="video/mp4,video/*" hidden>
+
+                    <!-- 時間範囲スライダー -->
+                    <div id="time-controls" class="time-range-container hidden">
+                        <div class="time-labels">
+                            <span id="time-start-label">00:00.000</span>
+                            <span id="time-current-label">00:00.000</span>
+                            <span id="time-end-label">00:00.000</span>
+                        </div>
+                        <div class="range-slider-container">
+                            <div id="range-track" class="range-track">
+                                <div id="range-selected" class="range-selected"></div>
+                                <div id="range-handle-start" class="range-handle" data-handle="start"></div>
+                                <div id="range-handle-end" class="range-handle" data-handle="end"></div>
+                            </div>
+                        </div>
+                        <div class="playback-controls">
+                            <button id="btn-play" class="btn-icon" title="再生/停止">
+                                <i data-lucide="play" id="play-icon"></i>
+                            </button>
+                            <input type="range" id="playback-slider" min="0" max="100" value="0" step="0.1">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右側：設定パネル -->
+                <div class="settings-panel">
+                    <!-- クロップ設定 -->
+                    <div class="settings-group">
+                        <h3><i data-lucide="crop" class="icon-section"></i> クロップ設定</h3>
+                        <div class="crop-inputs">
+                            <div class="input-row">
+                                <label>X: <input type="number" id="crop-x" min="0" value="0"></label>
+                                <label>Y: <input type="number" id="crop-y" min="0" value="0"></label>
+                            </div>
+                            <div class="input-row">
+                                <label>幅: <input type="number" id="crop-w" min="1" value="100"></label>
+                                <label>高さ: <input type="number" id="crop-h" min="1" value="100"></label>
+                            </div>
+                        </div>
+                        <div class="aspect-ratio-container">
+                            <label><i data-lucide="lock" class="icon-inline"></i> 比率:</label>
+                            <select id="aspect-ratio">
+                                <option value="free">自由</option>
+                                <option value="original">元動画と同じ</option>
+                                <option value="16:9">16:9</option>
+                                <option value="4:3">4:3</option>
+                                <option value="1:1">1:1</option>
+                                <option value="9:16">9:16</option>
+                                <option value="custom">カスタム</option>
+                            </select>
+                            <div id="custom-ratio-inputs" class="custom-ratio hidden">
+                                <input type="number" id="custom-ratio-w" min="1" value="16" placeholder="幅">
+                                <span>:</span>
+                                <input type="number" id="custom-ratio-h" min="1" value="9" placeholder="高さ">
+                            </div>
+                        </div>
+                        <button id="btn-reset-crop" class="btn-secondary">
+                            <i data-lucide="refresh-cw" class="icon-btn"></i> クロップをリセット
+                        </button>
+                    </div>
+
+                    <!-- 時間範囲設定 -->
+                    <div class="settings-group">
+                        <h3><i data-lucide="clock" class="icon-section"></i> 時間範囲</h3>
+                        <div class="time-inputs">
+                            <label>開始: <input type="text" id="input-start-time" value="00:00.000"
+                                    placeholder="00:00.000"></label>
+                            <label>終了: <input type="text" id="input-end-time" value="00:00.000"
+                                    placeholder="00:00.000"></label>
+                        </div>
+                        <p class="info-text" id="duration-info">選択範囲: 0秒</p>
+                    </div>
+
+                    <!-- 間隔設定 -->
+                    <div class="settings-group">
+                        <h3><i data-lucide="layers" class="icon-section"></i> フレーム間隔</h3>
+                        <div class="interval-container">
+                            <input type="number" id="interval-value" min="0.001" step="0.001" value="1.0">
+                            <span>秒ごと</span>
+                        </div>
+                        <p class="info-text" id="frame-count-info">推定フレーム数: 0</p>
+                    </div>
+
+                    <!-- アクションボタン -->
+                    <div class="action-buttons">
+                        <button id="btn-preview" class="btn-primary" disabled>
+                            <i data-lucide="eye" class="icon-btn"></i> プレビュー生成
+                        </button>
+                        <button id="btn-export" class="btn-success" disabled>
+                            <i data-lucide="download" class="icon-btn"></i> PNGをダウンロード
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- プレビューギャラリー -->
+        <section id="preview-section" class="preview-section hidden">
+            <h2><i data-lucide="image" class="icon-section"></i> プレビュー <span id="preview-count">(0 フレーム)</span></h2>
+            <p class="preview-hint">クリックで実サイズ表示</p>
+            <div id="preview-gallery" class="preview-gallery"></div>
+            <div id="progress-container" class="progress-container hidden">
+                <div class="progress-bar">
+                    <div id="progress-fill" class="progress-fill"></div>
+                </div>
+                <p id="progress-text">処理中...</p>
+            </div>
+        </section>
+
+        <!-- 実サイズ表示モーダル -->
+        <div id="image-modal" class="image-modal hidden">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content">
+                <button id="modal-close" class="modal-close">
+                    <i data-lucide="x"></i>
+                </button>
+                <button id="modal-prev" class="modal-nav modal-prev">
+                    <i data-lucide="chevron-left"></i>
+                </button>
+                <img id="modal-image" src="" alt="実サイズプレビュー">
+                <button id="modal-next" class="modal-nav modal-next">
+                    <i data-lucide="chevron-right"></i>
+                </button>
+                <p id="modal-info" class="modal-info"></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Lucide Iconsを初期化
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>
