@@ -2,6 +2,8 @@
 
 A modern, browser-based tool to extract high-quality PNG frames from MP4 videos. Process everything locally in your browser—no server uploads required.
 
+Page: https://yokazek.github.io/mp4-slicer/
+
 [日本語版はこちら (README.ja.md)](README.ja.md)
 
 ## ✨ Features
