@@ -2,6 +2,8 @@
 
 ブラウザ上で簡単かつ高品質に、MP4動画からPNGフレームを抽出できる特化型ツールです。すべての処理はブラウザ内（クライアントサイド）で完結するため、動画がサーバーにアップロードされることはありません。
 
+Page: https://yokazek.github.io/mp4-slicer/
+
 [English Version (README.md)](README.md)
 
 ## ✨ 特徴
