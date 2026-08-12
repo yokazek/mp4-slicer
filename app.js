@@ -8,9 +8,12 @@
 // ============================================
 const state = {
     video: null,
+    sourceFile: null,
     videoWidth: 0,
     videoHeight: 0,
     duration: 0,
+    sourceFrameCount: null,
+    sourceFps: null,
 
     // クロップ設定（実際のピクセル値）
     crop: { x: 0, y: 0, w: 0, h: 0 },
@@ -27,6 +30,7 @@ const state = {
 
     // プレビューフレーム
     previewFrames: [],
+    selectionMode: false,
 
     // UI状態
     isDraggingCrop: false,
@@ -134,6 +138,8 @@ const elements = {
 
     // 間隔設定
     intervalValue: document.getElementById('interval-value'),
+    sourceFrameInfo: document.getElementById('source-frame-info'),
+    btnFrameInterval: document.getElementById('btn-frame-interval'),
     frameCountInfo: document.getElementById('frame-count-info'),
 
     // アクション
@@ -144,6 +150,19 @@ const elements = {
     previewSection: document.getElementById('preview-section'),
     previewCount: document.getElementById('preview-count'),
     previewGallery: document.getElementById('preview-gallery'),
+    previewHint: document.getElementById('preview-hint'),
+    btnSelectionMode: document.getElementById('btn-selection-mode'),
+    selectionToolbar: document.getElementById('selection-toolbar'),
+    selectionCount: document.getElementById('selection-count'),
+    btnSelectAll: document.getElementById('btn-select-all'),
+    btnSelectNone: document.getElementById('btn-select-none'),
+    btnFlipbook: document.getElementById('btn-flipbook'),
+    flipbookPlayer: document.getElementById('flipbook-player'),
+    flipbookImage: document.getElementById('flipbook-image'),
+    flipbookInfo: document.getElementById('flipbook-info'),
+    flipbookFps: document.getElementById('flipbook-fps'),
+    btnFlipbookPlay: document.getElementById('btn-flipbook-play'),
+    btnFlipbookClose: document.getElementById('btn-flipbook-close'),
     progressContainer: document.getElementById('progress-container'),
     progressFill: document.getElementById('progress-fill'),
     progressText: document.getElementById('progress-text'),
@@ -241,12 +260,30 @@ function loadVideo(file) {
 
     video.src = url;
     video.load();
+    state.sourceFile = file;
+    state.sourceFrameCount = null;
+    state.sourceFps = null;
+    elements.sourceFrameInfo.textContent = '元動画: フレーム情報を解析中...';
+    elements.btnFrameInterval.disabled = true;
+
+    readMp4VideoFrameCount(file).then(frameCount => {
+        if (state.sourceFile !== file) return;
+        if (!frameCount) {
+            elements.sourceFrameInfo.textContent = '元動画: フレーム数を取得できませんでした';
+            return;
+        }
+        state.sourceFrameCount = frameCount;
+        updateSourceFrameInfo();
+    }).catch(() => {
+        if (state.sourceFile === file) elements.sourceFrameInfo.textContent = '元動画: フレーム数を取得できませんでした';
+    });
 
     video.onloadedmetadata = () => {
         state.video = video;
         state.videoWidth = video.videoWidth;
         state.videoHeight = video.videoHeight;
         state.duration = video.duration;
+        updateSourceFrameInfo();
 
         // 初期クロップ（全体）
         state.crop = { x: 0, y: 0, w: state.videoWidth, h: state.videoHeight };
@@ -270,6 +307,15 @@ function loadVideo(file) {
 
         // プレビューをリセット
         state.previewFrames = [];
+        state.selectionMode = false;
+        stopFlipbook();
+        elements.btnSelectionMode.setAttribute('aria-pressed', 'false');
+        elements.btnSelectionMode.classList.remove('active');
+        elements.btnSelectionMode.lastChild.textContent = ' 取捨選択モード: OFF';
+        elements.previewSection.classList.remove('selection-mode');
+        elements.selectionToolbar.classList.add('hidden');
+        elements.flipbookPlayer.classList.add('hidden');
+        elements.previewHint.textContent = 'クリックで実サイズ表示';
         elements.previewGallery.innerHTML = '';
         elements.previewSection.classList.add('hidden');
         elements.btnExport.disabled = true;
@@ -755,6 +801,80 @@ function setupSettings() {
         state.interval = parseFloat(elements.intervalValue.value) || 1.0;
         updateFrameCountInfo();
     });
+
+    elements.btnFrameInterval.addEventListener('click', () => {
+        if (!state.sourceFps) return;
+        state.interval = 1 / state.sourceFps;
+        elements.intervalValue.value = state.interval.toFixed(6);
+        updateFrameCountInfo();
+    });
+}
+
+function updateSourceFrameInfo() {
+    if (!state.sourceFrameCount || !state.duration) return;
+    state.sourceFps = state.sourceFrameCount / state.duration;
+    elements.sourceFrameInfo.textContent = `元動画: ${state.sourceFrameCount.toLocaleString()} フレーム / 平均 ${state.sourceFps.toFixed(3)} fps`;
+    elements.btnFrameInterval.disabled = false;
+}
+
+// MP4の動画トラックにあるサンプル数（stsz）を読む。外部ライブラリは使用しない。
+async function readMp4VideoFrameCount(file) {
+    const view = new DataView(await file.arrayBuffer());
+    const containers = new Set(['moov', 'trak', 'mdia', 'minf', 'stbl']);
+
+    function readType(offset) {
+        return String.fromCharCode(
+            view.getUint8(offset), view.getUint8(offset + 1),
+            view.getUint8(offset + 2), view.getUint8(offset + 3)
+        );
+    }
+
+    function readBoxes(start, end) {
+        const boxes = [];
+        let offset = start;
+        while (offset + 8 <= end) {
+            let size = view.getUint32(offset);
+            const type = readType(offset + 4);
+            let headerSize = 8;
+            if (size === 1) {
+                const largeSize = view.getBigUint64(offset + 8);
+                if (largeSize > BigInt(Number.MAX_SAFE_INTEGER)) break;
+                size = Number(largeSize);
+                headerSize = 16;
+            } else if (size === 0) {
+                size = end - offset;
+            }
+            if (size < headerSize || offset + size > end) break;
+            const box = { type, start: offset, dataStart: offset + headerSize, end: offset + size, children: [] };
+            if (containers.has(type)) box.children = readBoxes(box.dataStart, box.end);
+            boxes.push(box);
+            offset += size;
+        }
+        return boxes;
+    }
+
+    function find(boxes, type) {
+        for (const box of boxes) {
+            if (box.type === type) return box;
+            const nested = find(box.children, type);
+            if (nested) return nested;
+        }
+        return null;
+    }
+
+    const root = readBoxes(0, view.byteLength);
+    const moov = root.find(box => box.type === 'moov');
+    if (!moov) return null;
+
+    for (const trak of moov.children.filter(box => box.type === 'trak')) {
+        const handler = find(trak.children, 'hdlr');
+        if (!handler || handler.dataStart + 12 > handler.end || readType(handler.dataStart + 8) !== 'vide') continue;
+        const sampleSize = find(trak.children, 'stsz');
+        if (sampleSize && sampleSize.dataStart + 12 <= sampleSize.end) {
+            return view.getUint32(sampleSize.dataStart + 8);
+        }
+    }
+    return null;
 }
 
 function applyCropRatio() {
@@ -788,7 +908,8 @@ function applyCropRatio() {
 
 function updateFrameCountInfo() {
     const duration = state.timeRange.end - state.timeRange.start;
-    const frameCount = Math.floor(duration / state.interval) + 1;
+    // 動画の終了時刻には表示可能な新しいフレームがないため、終了点は含めない。
+    const frameCount = Math.ceil(duration / state.interval);
     elements.frameCountInfo.textContent = `推定フレーム数: ${frameCount}`;
 }
 
@@ -798,6 +919,13 @@ function updateFrameCountInfo() {
 function setupActions() {
     elements.btnPreview.addEventListener('click', generatePreview);
     elements.btnExport.addEventListener('click', exportPNG);
+    elements.btnSelectionMode.addEventListener('click', toggleSelectionMode);
+    elements.btnSelectAll.addEventListener('click', () => setAllFramesSelected(true));
+    elements.btnSelectNone.addEventListener('click', () => setAllFramesSelected(false));
+    elements.btnFlipbook.addEventListener('click', openFlipbook);
+    elements.btnFlipbookPlay.addEventListener('click', toggleFlipbookPlayback);
+    elements.btnFlipbookClose.addEventListener('click', closeFlipbook);
+    elements.flipbookFps.addEventListener('change', restartFlipbookIfPlaying);
 }
 
 async function generatePreview() {
@@ -815,7 +943,7 @@ async function extractFrames(isPreview = false) {
     const frames = [];
     const times = [];
 
-    for (let t = start; t <= end; t += interval) {
+    for (let t = start; t < end - 1e-9; t += interval) {
         times.push(t);
     }
 
@@ -850,7 +978,8 @@ async function extractFrames(isPreview = false) {
         frames.push({
             time: t,
             dataUrl,
-            index: i + 1
+            index: i + 1,
+            selected: true
         });
     }
 
@@ -861,25 +990,118 @@ async function extractFrames(isPreview = false) {
 }
 
 function displayPreview(frames) {
-    elements.previewCount.textContent = `(${frames.length} フレーム)`;
+    updateSelectionUI();
     elements.previewGallery.innerHTML = '';
 
     frames.forEach(frame => {
         const item = document.createElement('div');
-        item.className = 'preview-item';
+        item.className = `preview-item${frame.selected ? '' : ' deselected'}`;
+        item.dataset.frameIndex = frame.index;
         item.innerHTML = `
             <img src="${frame.dataUrl}" alt="Frame ${frame.index}">
+            <span class="selection-mark" aria-hidden="true">✓</span>
             <div class="frame-label">#${frame.index} (${formatTime(frame.time)})</div>
         `;
-        // クリックで実サイズ表示
         item.addEventListener('click', () => {
-            showImageModal(frame);
+            if (state.selectionMode) {
+                frame.selected = !frame.selected;
+                item.classList.toggle('deselected', !frame.selected);
+                updateSelectionUI();
+            } else {
+                showImageModal(frame);
+            }
         });
         elements.previewGallery.appendChild(item);
     });
 
     // モーダル閉じるイベント設定
     setupModal();
+}
+
+function toggleSelectionMode() {
+    state.selectionMode = !state.selectionMode;
+    elements.btnSelectionMode.setAttribute('aria-pressed', String(state.selectionMode));
+    elements.btnSelectionMode.classList.toggle('active', state.selectionMode);
+    elements.previewSection.classList.toggle('selection-mode', state.selectionMode);
+    elements.btnSelectionMode.lastChild.textContent = ` 取捨選択モード: ${state.selectionMode ? 'ON' : 'OFF'}`;
+    elements.selectionToolbar.classList.toggle('hidden', !state.selectionMode);
+    elements.previewHint.textContent = state.selectionMode
+        ? 'クリックで選択・非選択を切り替え（グレーは書き出し対象外）'
+        : 'クリックで実サイズ表示';
+    if (!state.selectionMode) closeFlipbook();
+}
+
+function getSelectedFrames() {
+    return state.previewFrames.filter(frame => frame.selected !== false);
+}
+
+function updateSelectionUI() {
+    const selectedCount = getSelectedFrames().length;
+    const total = state.previewFrames.length;
+    elements.previewCount.textContent = `(${selectedCount} / ${total} フレーム選択)`;
+    elements.selectionCount.textContent = `${selectedCount} / ${total} フレーム選択`;
+    elements.btnExport.disabled = selectedCount === 0;
+    elements.btnFlipbook.disabled = selectedCount === 0;
+}
+
+function setAllFramesSelected(selected) {
+    state.previewFrames.forEach(frame => { frame.selected = selected; });
+    elements.previewGallery.querySelectorAll('.preview-item').forEach(item => {
+        item.classList.toggle('deselected', !selected);
+    });
+    updateSelectionUI();
+    if (!selected) closeFlipbook();
+}
+
+let flipbookTimer = null;
+let flipbookIndex = 0;
+
+function openFlipbook() {
+    if (getSelectedFrames().length === 0) return;
+    flipbookIndex = 0;
+    elements.flipbookPlayer.classList.remove('hidden');
+    renderFlipbookFrame();
+    startFlipbook();
+}
+
+function renderFlipbookFrame() {
+    const frames = getSelectedFrames();
+    if (frames.length === 0) return closeFlipbook();
+    flipbookIndex %= frames.length;
+    const frame = frames[flipbookIndex];
+    elements.flipbookImage.src = frame.dataUrl;
+    elements.flipbookInfo.textContent = `#${frame.index} (${flipbookIndex + 1} / ${frames.length})`;
+}
+
+function startFlipbook() {
+    stopFlipbook();
+    const fps = Math.min(30, Math.max(1, Number(elements.flipbookFps.value) || 6));
+    elements.flipbookFps.value = fps;
+    elements.btnFlipbookPlay.textContent = '一時停止';
+    flipbookTimer = setInterval(() => {
+        flipbookIndex++;
+        renderFlipbookFrame();
+    }, 1000 / fps);
+}
+
+function stopFlipbook() {
+    if (flipbookTimer !== null) clearInterval(flipbookTimer);
+    flipbookTimer = null;
+    if (elements.btnFlipbookPlay) elements.btnFlipbookPlay.textContent = '再生';
+}
+
+function toggleFlipbookPlayback() {
+    if (flipbookTimer === null) startFlipbook();
+    else stopFlipbook();
+}
+
+function restartFlipbookIfPlaying() {
+    if (flipbookTimer !== null) startFlipbook();
+}
+
+function closeFlipbook() {
+    stopFlipbook();
+    elements.flipbookPlayer.classList.add('hidden');
 }
 
 // ============================================
@@ -968,19 +1190,22 @@ async function exportPNG() {
         await generatePreview();
     }
 
+    const exportFrames = getSelectedFrames();
+    if (exportFrames.length === 0) return;
+
     elements.progressContainer.classList.remove('hidden');
     elements.progressText.textContent = 'ZIPを生成中...';
     elements.progressFill.style.width = '0%';
 
     const zip = new JSZip();
 
-    for (let i = 0; i < state.previewFrames.length; i++) {
-        const frame = state.previewFrames[i];
+    for (let i = 0; i < exportFrames.length; i++) {
+        const frame = exportFrames[i];
         const base64Data = frame.dataUrl.split(',')[1];
         const filename = `frame_${String(frame.index).padStart(4, '0')}.png`;
         zip.file(filename, base64Data, { base64: true });
 
-        const progress = ((i + 1) / state.previewFrames.length) * 100;
+        const progress = ((i + 1) / exportFrames.length) * 100;
         elements.progressFill.style.width = `${progress}%`;
     }
 

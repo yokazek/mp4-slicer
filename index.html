@@ -131,7 +131,9 @@
                         <div class="interval-container">
                             <input type="number" id="interval-value" min="0.001" step="0.001" value="1.0">
                             <span>秒ごと</span>
+                            <button id="btn-frame-interval" class="inline-tool-button" type="button" disabled>平均1フレームごと</button>
                         </div>
+                        <p class="info-text" id="source-frame-info">元動画: 読み込み前</p>
                         <p class="info-text" id="frame-count-info">推定フレーム数: 0</p>
                     </div>
 
@@ -141,7 +143,7 @@
                             <i data-lucide="eye" class="icon-btn"></i> プレビュー生成
                         </button>
                         <button id="btn-export" class="btn-success" disabled>
-                            <i data-lucide="download" class="icon-btn"></i> PNGをダウンロード
+                            <i data-lucide="download" class="icon-btn"></i> 選択フレームをダウンロード
                         </button>
                     </div>
                 </div>
@@ -150,8 +152,32 @@
 
         <!-- プレビューギャラリー -->
         <section id="preview-section" class="preview-section hidden">
-            <h2><i data-lucide="image" class="icon-section"></i> プレビュー <span id="preview-count">(0 フレーム)</span></h2>
-            <p class="preview-hint">クリックで実サイズ表示</p>
+            <div class="preview-heading">
+                <h2><i data-lucide="image" class="icon-section"></i> プレビュー <span id="preview-count">(0 フレーム)</span></h2>
+                <button id="btn-selection-mode" class="preview-tool-button" type="button" aria-pressed="false">
+                    <i data-lucide="list-checks" class="icon-btn"></i> 取捨選択モード: OFF
+                </button>
+            </div>
+            <div id="selection-toolbar" class="selection-toolbar hidden">
+                <span id="selection-count">0 / 0 フレーム選択</span>
+                <div class="selection-actions">
+                    <button id="btn-select-all" class="preview-tool-button" type="button">すべて選択</button>
+                    <button id="btn-select-none" class="preview-tool-button" type="button">すべて解除</button>
+                    <button id="btn-flipbook" class="preview-tool-button" type="button">
+                        <i data-lucide="play" class="icon-btn"></i> パラパラ漫画
+                    </button>
+                </div>
+            </div>
+            <p id="preview-hint" class="preview-hint">クリックで実サイズ表示</p>
+            <div id="flipbook-player" class="flipbook-player hidden">
+                <img id="flipbook-image" src="" alt="選択フレームのパラパラ漫画">
+                <div class="flipbook-controls">
+                    <button id="btn-flipbook-play" class="preview-tool-button" type="button">再生</button>
+                    <label>速度 <input id="flipbook-fps" type="number" min="1" max="30" value="6"> fps</label>
+                    <span id="flipbook-info"></span>
+                    <button id="btn-flipbook-close" class="preview-tool-button" type="button">閉じる</button>
+                </div>
+            </div>
             <div id="preview-gallery" class="preview-gallery"></div>
             <div id="progress-container" class="progress-container hidden">
                 <div class="progress-bar">

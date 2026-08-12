@@ -663,6 +663,25 @@ select {
     width: 100px;
 }
 
+.inline-tool-button {
+    padding: 0.45rem 0.65rem;
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.inline-tool-button:hover:not(:disabled) {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.inline-tool-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 .interval-container span {
     color: var(--text-secondary);
 }
@@ -741,7 +760,51 @@ select {
 
 .preview-section h2 {
     font-size: 1.25rem;
-    margin-bottom: 1rem;
+    margin: 0;
+}
+
+.preview-heading,
+.selection-toolbar,
+.selection-actions,
+.flipbook-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.preview-heading {
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.selection-toolbar {
+    justify-content: space-between;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+}
+
+.preview-tool-button {
+    padding: 0.45rem 0.75rem;
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.preview-tool-button:hover:not(:disabled),
+.preview-tool-button.active {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.preview-tool-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 #preview-count {
@@ -797,6 +860,70 @@ select {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.preview-item.deselected img {
+    filter: grayscale(1) brightness(0.38);
+}
+
+.preview-item.deselected {
+    opacity: 0.7;
+}
+
+.selection-mark {
+    display: none;
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 1;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    background: var(--accent-success);
+    color: white;
+    text-align: center;
+    line-height: 1.6rem;
+    font-weight: 700;
+}
+
+.preview-section.selection-mode .selection-mark {
+    display: block;
+}
+
+.preview-item.deselected .selection-mark {
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+}
+
+.flipbook-player {
+    width: min(720px, 100%);
+    margin: 0 auto 1rem;
+    padding: 0.75rem;
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+}
+
+.flipbook-player img {
+    display: block;
+    width: 100%;
+    max-height: 60vh;
+    object-fit: contain;
+    background: #000;
+}
+
+.flipbook-controls {
+    margin-top: 0.75rem;
+    justify-content: center;
+}
+
+.flipbook-controls label {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.flipbook-controls input {
+    width: 4rem;
+    padding: 0.4rem;
 }
 
 .preview-item .frame-label {
