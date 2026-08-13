@@ -30,6 +30,24 @@
             </div>
         </header>
 
+        <!-- 画像からアニメーションを作成 -->
+        <section class="image-import-section">
+            <div id="image-drop-zone" class="image-drop-zone" tabindex="0" role="button">
+                <i data-lucide="images" class="drop-icon"></i>
+                <div>
+                    <h2>画像からアニメーションを作成</h2>
+                    <p>画像リストまたは画像入りフォルダーをドラッグ＆ドロップ</p>
+                </div>
+                <div class="image-import-actions">
+                    <button id="btn-select-images" class="preview-tool-button" type="button">画像を選択</button>
+                    <button id="btn-select-folder" class="preview-tool-button" type="button">フォルダーを選択</button>
+                </div>
+            </div>
+            <input id="image-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" multiple hidden>
+            <input id="image-folder-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" webkitdirectory multiple hidden>
+            <p id="image-import-status" class="info-text image-import-status">PNG / JPEG / WebP / GIF / BMP に対応</p>
+        </section>
+
         <!-- 統合エディタ（常時表示） -->
         <section id="editor-section" class="editor-section">
             <div class="editor-layout">
@@ -142,6 +160,28 @@
                         <button id="btn-preview" class="btn-primary" disabled>
                             <i data-lucide="eye" class="icon-btn"></i> プレビュー生成
                         </button>
+                        <label class="export-format-control">画像の出力形式
+                            <select id="export-image-format">
+                                <option value="original">元の形式</option>
+                                <option value="png">PNG</option>
+                                <option value="webp">WebP</option>
+                            </select>
+                        </label>
+                        <div id="webp-export-options" class="webp-export-options hidden">
+                            <label>圧縮方式
+                                <select id="webp-mode">
+                                    <option value="lossy">Lossy</option>
+                                    <option value="lossless">Lossless</option>
+                                </select>
+                            </label>
+                            <label><span id="webp-quality-label">Quality</span>
+                                <input id="webp-quality" type="number" min="0" max="100" value="90">
+                            </label>
+                            <label>Effort
+                                <input id="webp-effort" type="number" min="0" max="6" value="4">
+                            </label>
+                            <p id="webp-option-hint" class="info-text">Qualityは画質、Effortは圧縮時間と容量のバランスです。</p>
+                        </div>
                         <button id="btn-export" class="btn-success" disabled>
                             <i data-lucide="download" class="icon-btn"></i> 選択フレームをダウンロード
                         </button>
@@ -173,18 +213,51 @@
                 <img id="flipbook-image" src="" alt="選択フレームのパラパラ漫画">
                 <div class="flipbook-controls">
                     <button id="btn-flipbook-play" class="preview-tool-button" type="button">再生</button>
-                    <label>速度 <input id="flipbook-fps" type="number" min="1" max="30" value="6"> fps</label>
+                    <label>速度 <input id="flipbook-fps" type="number" min="1" max="60" value="6"> fps</label>
                     <span id="flipbook-info"></span>
                     <button id="btn-flipbook-close" class="preview-tool-button" type="button">閉じる</button>
                 </div>
             </div>
-            <div id="preview-gallery" class="preview-gallery"></div>
-            <div id="progress-container" class="progress-container hidden">
-                <div class="progress-bar">
-                    <div id="progress-fill" class="progress-fill"></div>
+            <div id="gif-export-panel" class="gif-export-panel">
+                <div class="gif-panel-heading">
+                    <h3><i data-lucide="clapperboard" class="icon-section"></i> アニメーションGIF</h3>
+                    <span id="gif-estimate" class="info-text"></span>
                 </div>
-                <p id="progress-text">処理中...</p>
+                <div class="gif-settings-grid">
+                    <label>幅 <input id="gif-width" type="number" min="1" max="4096" value="480"></label>
+                    <label>高さ <input id="gif-height" type="number" min="1" max="4096" value="320"></label>
+                    <label class="checkbox-label"><input id="gif-lock-ratio" type="checkbox" checked> 比率を固定</label>
+                    <label>速度 <input id="gif-fps" type="number" min="1" max="60" value="6"> fps</label>
+                    <label>色数 <input id="gif-colors" type="number" min="2" max="256" value="256"></label>
+                    <label>リサイズ
+                        <select id="gif-fit">
+                            <option value="contain">比率を保って収める</option>
+                            <option value="cover">比率を保って切り抜く</option>
+                            <option value="stretch">指定サイズに伸縮</option>
+                        </select>
+                    </label>
+                    <label>背景色 <input id="gif-background" type="color" value="#ffffff"></label>
+                    <label>全体ループ
+                        <select id="gif-repeat">
+                            <option value="0">無限</option>
+                            <option value="-1">1回だけ</option>
+                            <option value="1">2回再生</option>
+                            <option value="2">3回再生</option>
+                            <option value="4">5回再生</option>
+                            <option value="9">10回再生</option>
+                        </select>
+                    </label>
+                    <label class="checkbox-label"><input id="gif-dither" type="checkbox" checked> ディザリング</label>
+                </div>
+                <div class="gif-actions">
+                    <button id="btn-export-gif" class="btn-success" type="button" disabled>
+                        <i data-lucide="download" class="icon-btn"></i> 選択画像からGIFを作成
+                    </button>
+                    <button id="btn-cancel-gif" class="btn-secondary hidden" type="button">キャンセル</button>
+                </div>
+                <p id="gif-result" class="gif-result hidden"></p>
             </div>
+            <div id="preview-gallery" class="preview-gallery"></div>
         </section>
 
         <!-- 実サイズ表示モーダル -->
@@ -202,6 +275,17 @@
                     <i data-lucide="chevron-right"></i>
                 </button>
                 <p id="modal-info" class="modal-info"></p>
+            </div>
+        </div>
+
+        <!-- 画面内のどこからでも見える処理状況 -->
+        <div id="progress-container" class="progress-container hidden" role="status" aria-live="polite" aria-hidden="true">
+            <div class="progress-status-row">
+                <p id="progress-text">処理中...</p>
+                <span id="progress-percent">0%</span>
+            </div>
+            <div class="progress-bar" aria-hidden="true">
+                <div id="progress-fill" class="progress-fill"></div>
             </div>
         </div>
     </div>

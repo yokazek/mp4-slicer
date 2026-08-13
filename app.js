@@ -7,6 +7,7 @@
 // アプリケーション状態
 // ============================================
 const state = {
+    sourceMode: null, // 'video' | 'image'
     video: null,
     sourceFile: null,
     videoWidth: 0,
@@ -31,6 +32,11 @@ const state = {
     // プレビューフレーム
     previewFrames: [],
     selectionMode: false,
+    imageObjectUrls: [],
+    gifAspectRatio: 1,
+    gifCancelled: false,
+    activeProgressButton: null,
+    activeProgressButtonWasDisabled: false,
 
     // UI状態
     isDraggingCrop: false,
@@ -98,6 +104,14 @@ function applyTheme(theme) {
 // DOM要素
 // ============================================
 const elements = {
+    // 画像入力
+    imageDropZone: document.getElementById('image-drop-zone'),
+    imageFileInput: document.getElementById('image-file-input'),
+    imageFolderInput: document.getElementById('image-folder-input'),
+    btnSelectImages: document.getElementById('btn-select-images'),
+    btnSelectFolder: document.getElementById('btn-select-folder'),
+    imageImportStatus: document.getElementById('image-import-status'),
+
     // ドロップゾーン（動画コンテナ内）
     videoDropZone: document.getElementById('video-drop-zone'),
     fileInput: document.getElementById('file-input'),
@@ -145,6 +159,13 @@ const elements = {
     // アクション
     btnPreview: document.getElementById('btn-preview'),
     btnExport: document.getElementById('btn-export'),
+    exportImageFormat: document.getElementById('export-image-format'),
+    webpExportOptions: document.getElementById('webp-export-options'),
+    webpMode: document.getElementById('webp-mode'),
+    webpQuality: document.getElementById('webp-quality'),
+    webpQualityLabel: document.getElementById('webp-quality-label'),
+    webpEffort: document.getElementById('webp-effort'),
+    webpOptionHint: document.getElementById('webp-option-hint'),
 
     // プレビュー
     previewSection: document.getElementById('preview-section'),
@@ -166,6 +187,22 @@ const elements = {
     progressContainer: document.getElementById('progress-container'),
     progressFill: document.getElementById('progress-fill'),
     progressText: document.getElementById('progress-text'),
+    progressPercent: document.getElementById('progress-percent'),
+
+    // GIF出力
+    gifWidth: document.getElementById('gif-width'),
+    gifHeight: document.getElementById('gif-height'),
+    gifLockRatio: document.getElementById('gif-lock-ratio'),
+    gifFps: document.getElementById('gif-fps'),
+    gifColors: document.getElementById('gif-colors'),
+    gifFit: document.getElementById('gif-fit'),
+    gifBackground: document.getElementById('gif-background'),
+    gifRepeat: document.getElementById('gif-repeat'),
+    gifDither: document.getElementById('gif-dither'),
+    gifEstimate: document.getElementById('gif-estimate'),
+    btnExportGif: document.getElementById('btn-export-gif'),
+    btnCancelGif: document.getElementById('btn-cancel-gif'),
+    gifResult: document.getElementById('gif-result'),
 
     // モーダル
     imageModal: document.getElementById('image-modal'),
@@ -179,11 +216,239 @@ const elements = {
 // ============================================
 function init() {
     initTheme();
+    setupImageImport();
     setupDropZone();
     setupCropOverlay();
     setupTimeRange();
     setupSettings();
     setupActions();
+    window.addEventListener('beforeunload', stopWebpWorker);
+}
+
+// ============================================
+// 画像リスト／フォルダー読み込み
+// ============================================
+const supportedImagePattern = /\.(png|jpe?g|webp|gif|bmp)$/i;
+const naturalFileCollator = new Intl.Collator('ja', { numeric: true, sensitivity: 'base' });
+
+function setupImageImport() {
+    const { imageDropZone, imageFileInput, imageFolderInput, btnSelectImages, btnSelectFolder } = elements;
+
+    btnSelectImages.addEventListener('click', (event) => {
+        event.stopPropagation();
+        imageFileInput.click();
+    });
+    btnSelectFolder.addEventListener('click', (event) => {
+        event.stopPropagation();
+        imageFolderInput.click();
+    });
+    imageDropZone.addEventListener('click', () => imageFileInput.click());
+    imageDropZone.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            imageFileInput.click();
+        }
+    });
+    imageDropZone.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        imageDropZone.classList.add('drag-over');
+    });
+    imageDropZone.addEventListener('dragleave', () => imageDropZone.classList.remove('drag-over'));
+    imageDropZone.addEventListener('drop', async (event) => {
+        event.preventDefault();
+        imageDropZone.classList.remove('drag-over');
+        await handleImageDrop(event.dataTransfer);
+    });
+
+    imageFileInput.addEventListener('change', async (event) => {
+        await loadImageFiles(Array.from(event.target.files));
+        event.target.value = '';
+    });
+    imageFolderInput.addEventListener('change', async (event) => {
+        await loadImageFiles(Array.from(event.target.files));
+        event.target.value = '';
+    });
+}
+
+async function handleImageDrop(dataTransfer) {
+    const items = Array.from(dataTransfer.items || []);
+    const entries = items.map(item => item.webkitGetAsEntry?.()).filter(Boolean);
+    let files;
+
+    if (entries.length > 0) {
+        files = (await Promise.all(entries.map(entry => readDroppedEntry(entry)))).flat();
+    } else {
+        files = Array.from(dataTransfer.files || []);
+    }
+
+    await loadImageFiles(files);
+}
+
+async function readDroppedEntry(entry, parentPath = '') {
+    if (entry.isFile) {
+        const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+        Object.defineProperty(file, '_dropPath', {
+            value: `${parentPath}${file.name}`,
+            configurable: true
+        });
+        return [file];
+    }
+    if (!entry.isDirectory) return [];
+
+    const reader = entry.createReader();
+    const children = [];
+    while (true) {
+        const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+        if (batch.length === 0) break;
+        children.push(...batch);
+    }
+    const directoryPath = `${parentPath}${entry.name}/`;
+    return (await Promise.all(children.map(child => readDroppedEntry(child, directoryPath)))).flat();
+}
+
+function isSupportedImage(file) {
+    return file.type.startsWith('image/') && supportedImagePattern.test(file.name)
+        || supportedImagePattern.test(file.name);
+}
+
+function getImagePath(file) {
+    return file.webkitRelativePath || file._dropPath || file.name;
+}
+
+async function loadImageFiles(files) {
+    const imageFiles = files.filter(isSupportedImage).sort((a, b) =>
+        naturalFileCollator.compare(getImagePath(a), getImagePath(b))
+    );
+    if (imageFiles.length === 0) {
+        showImageImportStatus('対応する画像が見つかりませんでした', true);
+        return;
+    }
+
+    releaseImageObjectUrls();
+    closeFlipbook();
+    elements.previewSection.classList.remove('hidden');
+    showProgress('画像を読み込み中...');
+    elements.previewGallery.innerHTML = '';
+    showImageImportStatus(`${imageFiles.length}枚の画像を読み込み中...`);
+
+    const frames = [];
+    let failedCount = 0;
+    for (let i = 0; i < imageFiles.length; i++) {
+        const file = imageFiles[i];
+        try {
+            const decoded = await decodeImageFile(file);
+            frames.push({
+                id: `image-${Date.now()}-${i}`,
+                sourceType: 'image',
+                file,
+                name: file.name,
+                relativePath: getImagePath(file),
+                dataUrl: decoded.url,
+                width: decoded.width,
+                height: decoded.height,
+                time: i / 6,
+                index: frames.length + 1,
+                selected: true
+            });
+            state.imageObjectUrls.push(decoded.url);
+        } catch (error) {
+            failedCount++;
+        }
+        const progress = ((i + 1) / imageFiles.length) * 100;
+        updateProgress(progress, `画像を読み込み中... ${i + 1} / ${imageFiles.length}`);
+        if (i % 10 === 0) await nextPaint();
+    }
+
+    hideProgress();
+    if (frames.length === 0) {
+        showImageImportStatus('画像を読み込めませんでした', true);
+        elements.previewSection.classList.add('hidden');
+        return;
+    }
+
+    state.sourceMode = 'image';
+    state.previewFrames = frames;
+    state.selectionMode = true;
+    elements.previewSection.classList.add('selection-mode');
+    elements.selectionToolbar.classList.remove('hidden');
+    elements.btnSelectionMode.setAttribute('aria-pressed', 'true');
+    elements.btnSelectionMode.classList.add('active');
+    elements.btnSelectionMode.lastChild.textContent = ' 取捨選択モード: ON';
+    elements.previewHint.textContent = 'クリックで選択・非選択を切り替え（グレーは書き出し対象外）';
+    elements.btnExport.textContent = '選択画像をダウンロード';
+    initializeGifSize(frames[0]);
+    displayPreview(frames);
+    updateGifEstimate();
+
+    const message = `${frames.length}枚を読み込みました${failedCount ? `（${failedCount}枚は読み込み失敗）` : ''}`;
+    showImageImportStatus(message, failedCount > 0);
+    elements.previewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function decodeImageFile(file) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => resolve({ url, width: image.naturalWidth, height: image.naturalHeight });
+        image.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error(`画像を読み込めません: ${file.name}`));
+        };
+        image.src = url;
+    });
+}
+
+function releaseImageObjectUrls() {
+    state.imageObjectUrls.forEach(url => URL.revokeObjectURL(url));
+    state.imageObjectUrls = [];
+}
+
+function showImageImportStatus(message, isError = false) {
+    elements.imageImportStatus.textContent = message;
+    elements.imageImportStatus.classList.toggle('error', isError);
+}
+
+function nextPaint() {
+    return new Promise(resolve => requestAnimationFrame(() => resolve()));
+}
+
+function showProgress(message, button = null) {
+    state.activeProgressButton = button;
+    state.activeProgressButtonWasDisabled = button?.disabled || false;
+    elements.progressContainer.classList.remove('hidden');
+    elements.progressContainer.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('is-processing');
+    if (button) {
+        button.disabled = true;
+        button.classList.add('button-progress');
+        button.setAttribute('aria-busy', 'true');
+    }
+    updateProgress(0, message);
+}
+
+function updateProgress(percent, message) {
+    const value = Math.min(100, Math.max(0, Number(percent) || 0));
+    elements.progressFill.style.width = `${value}%`;
+    elements.progressPercent.textContent = `${Math.round(value)}%`;
+    if (message) elements.progressText.textContent = message;
+    if (state.activeProgressButton) {
+        state.activeProgressButton.style.setProperty('--button-progress', `${value}%`);
+    }
+}
+
+function hideProgress() {
+    const button = state.activeProgressButton;
+    elements.progressContainer.classList.add('hidden');
+    elements.progressContainer.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('is-processing');
+    if (button) {
+        button.classList.remove('button-progress');
+        button.style.removeProperty('--button-progress');
+        button.removeAttribute('aria-busy');
+        button.disabled = state.activeProgressButtonWasDisabled;
+    }
+    state.activeProgressButton = null;
+    state.activeProgressButtonWasDisabled = false;
 }
 
 // ============================================
@@ -208,12 +473,14 @@ function setupDropZone() {
     });
 
     // ドロップゾーンのドロップ
-    videoDropZone.addEventListener('drop', (e) => {
+    videoDropZone.addEventListener('drop', async (e) => {
         e.preventDefault();
         videoDropZone.classList.remove('drag-over');
         const file = e.dataTransfer.files[0];
         if (file && file.type.startsWith('video/')) {
             loadVideo(file);
+        } else {
+            await handleImageDrop(e.dataTransfer);
         }
     });
 
@@ -232,12 +499,14 @@ function setupDropZone() {
         videoContainer.classList.remove('drag-over');
     });
 
-    videoContainer.addEventListener('drop', (e) => {
+    videoContainer.addEventListener('drop', async (e) => {
         e.preventDefault();
         videoContainer.classList.remove('drag-over');
         const file = e.dataTransfer.files[0];
         if (file && file.type.startsWith('video/')) {
             loadVideo(file);
+        } else {
+            await handleImageDrop(e.dataTransfer);
         }
     });
 
@@ -255,6 +524,8 @@ function setupDropZone() {
 // 動画読み込み
 // ============================================
 function loadVideo(file) {
+    releaseImageObjectUrls();
+    state.sourceMode = 'video';
     const url = URL.createObjectURL(file);
     const video = elements.videoPlayer;
 
@@ -319,6 +590,8 @@ function loadVideo(file) {
         elements.previewGallery.innerHTML = '';
         elements.previewSection.classList.add('hidden');
         elements.btnExport.disabled = true;
+        elements.btnExport.innerHTML = '<i data-lucide="download" class="icon-btn"></i> 選択フレームをダウンロード';
+        elements.btnExportGif.disabled = true;
 
         // プレビューボタンを有効化
         elements.btnPreview.disabled = false;
@@ -918,7 +1191,9 @@ function updateFrameCountInfo() {
 // ============================================
 function setupActions() {
     elements.btnPreview.addEventListener('click', generatePreview);
-    elements.btnExport.addEventListener('click', exportPNG);
+    elements.btnExport.addEventListener('click', exportImages);
+    elements.exportImageFormat.addEventListener('change', updateWebpExportOptions);
+    elements.webpMode.addEventListener('change', updateWebpExportOptions);
     elements.btnSelectionMode.addEventListener('click', toggleSelectionMode);
     elements.btnSelectAll.addEventListener('click', () => setAllFramesSelected(true));
     elements.btnSelectNone.addEventListener('click', () => setAllFramesSelected(false));
@@ -926,10 +1201,18 @@ function setupActions() {
     elements.btnFlipbookPlay.addEventListener('click', toggleFlipbookPlayback);
     elements.btnFlipbookClose.addEventListener('click', closeFlipbook);
     elements.flipbookFps.addEventListener('change', restartFlipbookIfPlaying);
+    elements.btnExportGif.addEventListener('click', exportGif);
+    elements.btnCancelGif.addEventListener('click', () => { state.gifCancelled = true; });
+    elements.gifWidth.addEventListener('input', () => updateGifDimension('width'));
+    elements.gifHeight.addEventListener('input', () => updateGifDimension('height'));
+    elements.gifFps.addEventListener('change', syncGifFps);
+    elements.gifColors.addEventListener('change', updateGifEstimate);
+    updateWebpExportOptions();
 }
 
 async function generatePreview() {
     const frames = await extractFrames(true);
+    if (frames.length > 0) initializeGifSize(frames[0]);
     displayPreview(frames);
     elements.btnExport.disabled = frames.length === 0;
 }
@@ -949,7 +1232,7 @@ async function extractFrames(isPreview = false) {
 
     // プログレス表示
     elements.previewSection.classList.remove('hidden');
-    elements.progressContainer.classList.remove('hidden');
+    showProgress('フレームを抽出中...', elements.btnPreview);
     elements.previewGallery.innerHTML = '';
 
     const canvas = document.createElement('canvas');
@@ -962,8 +1245,7 @@ async function extractFrames(isPreview = false) {
 
         // 進捗更新
         const progress = ((i + 1) / times.length) * 100;
-        elements.progressFill.style.width = `${progress}%`;
-        elements.progressText.textContent = `処理中... ${i + 1} / ${times.length}`;
+        updateProgress(progress, `フレームを抽出中... ${i + 1} / ${times.length}`);
 
         // フレーム取得
         video.currentTime = t;
@@ -976,14 +1258,19 @@ async function extractFrames(isPreview = false) {
 
         const dataUrl = canvas.toDataURL('image/png');
         frames.push({
+            id: `video-${i}`,
+            sourceType: 'video',
+            name: `frame_${String(i + 1).padStart(4, '0')}.png`,
             time: t,
             dataUrl,
+            width: w,
+            height: h,
             index: i + 1,
             selected: true
         });
     }
 
-    elements.progressContainer.classList.add('hidden');
+    hideProgress();
     state.previewFrames = frames;
 
     return frames;
@@ -997,11 +1284,19 @@ function displayPreview(frames) {
         const item = document.createElement('div');
         item.className = `preview-item${frame.selected ? '' : ' deselected'}`;
         item.dataset.frameIndex = frame.index;
-        item.innerHTML = `
-            <img src="${frame.dataUrl}" alt="Frame ${frame.index}">
-            <span class="selection-mark" aria-hidden="true">✓</span>
-            <div class="frame-label">#${frame.index} (${formatTime(frame.time)})</div>
-        `;
+        const image = document.createElement('img');
+        image.src = frame.dataUrl;
+        image.alt = frame.name || `Frame ${frame.index}`;
+        const mark = document.createElement('span');
+        mark.className = 'selection-mark';
+        mark.setAttribute('aria-hidden', 'true');
+        mark.textContent = '✓';
+        const label = document.createElement('div');
+        label.className = 'frame-label';
+        label.textContent = frame.sourceType === 'image'
+            ? `#${frame.index} ${frame.name} (${frame.width}×${frame.height})`
+            : `#${frame.index} (${formatTime(frame.time)})`;
+        item.append(image, mark, label);
         item.addEventListener('click', () => {
             if (state.selectionMode) {
                 frame.selected = !frame.selected;
@@ -1042,6 +1337,8 @@ function updateSelectionUI() {
     elements.selectionCount.textContent = `${selectedCount} / ${total} フレーム選択`;
     elements.btnExport.disabled = selectedCount === 0;
     elements.btnFlipbook.disabled = selectedCount === 0;
+    elements.btnExportGif.disabled = selectedCount === 0;
+    updateGifEstimate();
 }
 
 function setAllFramesSelected(selected) {
@@ -1075,7 +1372,7 @@ function renderFlipbookFrame() {
 
 function startFlipbook() {
     stopFlipbook();
-    const fps = Math.min(30, Math.max(1, Number(elements.flipbookFps.value) || 6));
+    const fps = Math.min(60, Math.max(1, Number(elements.flipbookFps.value) || 6));
     elements.flipbookFps.value = fps;
     elements.btnFlipbookPlay.textContent = '一時停止';
     flipbookTimer = setInterval(() => {
@@ -1163,7 +1460,10 @@ function updateModalContent() {
     if (!frame) return;
 
     modalImage.src = frame.dataUrl;
-    modalInfo.textContent = `フレーム #${frame.index} / ${state.previewFrames.length} | 時間: ${formatTime(frame.time)} | サイズ: ${state.crop.w} × ${state.crop.h}px | ← → でナビゲート`;
+    const sourceInfo = frame.sourceType === 'image'
+        ? `${frame.relativePath || frame.name}`
+        : `時間: ${formatTime(frame.time)}`;
+    modalInfo.textContent = `#${frame.index} / ${state.previewFrames.length} | ${sourceInfo} | サイズ: ${frame.width} × ${frame.height}px | ← → でナビゲート`;
 }
 
 function showPrevImage() {
@@ -1183,9 +1483,259 @@ function closeImageModal() {
 }
 
 // ============================================
-// PNG書き出し
+// アニメーションGIF書き出し
 // ============================================
-async function exportPNG() {
+const gifEncoderModuleUrl = 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js';
+
+function initializeGifSize(frame) {
+    if (!frame?.width || !frame?.height) return;
+    const scale = Math.min(1, 4096 / frame.width, 4096 / frame.height);
+    const width = Math.max(1, Math.round(frame.width * scale));
+    const height = Math.max(1, Math.round(frame.height * scale));
+    state.gifAspectRatio = width / height;
+    elements.gifWidth.value = width;
+    elements.gifHeight.value = height;
+    elements.gifFps.value = elements.flipbookFps.value || 6;
+}
+
+function updateGifDimension(changed) {
+    let width = clampNumber(elements.gifWidth.value, 1, 4096, 480);
+    let height = clampNumber(elements.gifHeight.value, 1, 4096, 320);
+    if (elements.gifLockRatio.checked && state.gifAspectRatio > 0) {
+        if (changed === 'width') height = Math.max(1, Math.round(width / state.gifAspectRatio));
+        else width = Math.max(1, Math.round(height * state.gifAspectRatio));
+    }
+    elements.gifWidth.value = Math.min(4096, width);
+    elements.gifHeight.value = Math.min(4096, height);
+    updateGifEstimate();
+}
+
+function syncGifFps() {
+    const fps = clampNumber(elements.gifFps.value, 1, 60, 6);
+    elements.gifFps.value = fps;
+    elements.flipbookFps.value = fps;
+    restartFlipbookIfPlaying();
+    updateGifEstimate();
+}
+
+function updateGifEstimate() {
+    if (!elements.gifEstimate) return;
+    const count = getSelectedFrames().length;
+    const width = clampNumber(elements.gifWidth.value, 1, 4096, 480);
+    const height = clampNumber(elements.gifHeight.value, 1, 4096, 320);
+    const rawBytes = width * height * 4 * count;
+    elements.gifEstimate.textContent = count > 0
+        ? `${count}フレーム / 処理量 約${formatBytes(rawBytes)}`
+        : '画像を選択してください';
+}
+
+async function exportGif() {
+    const frames = getSelectedFrames();
+    if (frames.length === 0) return;
+
+    const width = clampNumber(elements.gifWidth.value, 1, 4096, 480);
+    const height = clampNumber(elements.gifHeight.value, 1, 4096, 320);
+    const fps = clampNumber(elements.gifFps.value, 1, 60, 6);
+    const colors = clampNumber(elements.gifColors.value, 2, 256, 256);
+    const repeat = Number(elements.gifRepeat.value);
+    const delay = Math.max(20, Math.round(1000 / fps));
+    const rawBytes = width * height * 4 * frames.length;
+
+    elements.gifWidth.value = width;
+    elements.gifHeight.value = height;
+    elements.gifFps.value = fps;
+    elements.gifColors.value = colors;
+    if (rawBytes > 512 * 1024 * 1024 && !window.confirm(
+        `処理量が約${formatBytes(rawBytes)}あります。ブラウザーの動作が重くなる可能性があります。続行しますか？`
+    )) return;
+
+    state.gifCancelled = false;
+    showProgress('GIFエンコーダーを準備中...', elements.btnExportGif);
+    elements.btnCancelGif.classList.remove('hidden');
+    elements.gifResult.classList.add('hidden');
+    elements.gifResult.classList.remove('error');
+
+    try {
+        const { GIFEncoder, quantize, applyPalette } = await import(gifEncoderModuleUrl);
+        if (state.gifCancelled) throw new DOMException('キャンセルされました', 'AbortError');
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        const gif = GIFEncoder();
+
+        for (let i = 0; i < frames.length; i++) {
+            if (state.gifCancelled) throw new DOMException('キャンセルされました', 'AbortError');
+            const image = await loadImageElement(frames[i].dataUrl);
+            drawGifFrame(context, image, width, height);
+            const imageData = context.getImageData(0, 0, width, height);
+            if (elements.gifDither.checked) applyOrderedDither(imageData.data, width, height);
+            const palette = quantize(imageData.data, colors, { format: 'rgb565' });
+            const indexed = applyPalette(imageData.data, palette, 'rgb565');
+            const options = { palette, delay, dispose: 1 };
+            if (i === 0) options.repeat = repeat;
+            gif.writeFrame(indexed, width, height, options);
+
+            const progress = ((i + 1) / frames.length) * 100;
+            updateProgress(progress, `GIFを生成中... ${i + 1} / ${frames.length}`);
+            await nextPaint();
+        }
+
+        gif.finish();
+        const blob = new Blob([gif.bytes()], { type: 'image/gif' });
+        downloadBlob(blob, `animation_${Date.now()}.gif`);
+        showGifResult(`${width}×${height}px・${frames.length}フレーム・${colors}色・${formatBytes(blob.size)} を出力しました`);
+    } catch (error) {
+        if (error.name === 'AbortError') showGifResult('GIF生成をキャンセルしました', true);
+        else {
+            console.error(error);
+            showGifResult('GIFを生成できませんでした。通信状態または画像サイズを確認してください。', true);
+        }
+    } finally {
+        hideProgress();
+        elements.btnCancelGif.classList.add('hidden');
+        elements.btnExportGif.disabled = getSelectedFrames().length === 0;
+    }
+}
+
+function drawGifFrame(context, image, width, height) {
+    context.save();
+    context.fillStyle = elements.gifBackground.value;
+    context.fillRect(0, 0, width, height);
+    const fit = elements.gifFit.value;
+    if (fit === 'stretch') {
+        context.drawImage(image, 0, 0, width, height);
+    } else {
+        const scale = fit === 'cover'
+            ? Math.max(width / image.naturalWidth, height / image.naturalHeight)
+            : Math.min(width / image.naturalWidth, height / image.naturalHeight);
+        const drawWidth = image.naturalWidth * scale;
+        const drawHeight = image.naturalHeight * scale;
+        context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+    }
+    context.restore();
+}
+
+function applyOrderedDither(data, width, height) {
+    const matrix = [
+        0, 8, 2, 10,
+        12, 4, 14, 6,
+        3, 11, 1, 9,
+        15, 7, 13, 5
+    ];
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const offset = (y * width + x) * 4;
+            const adjustment = (matrix[(y & 3) * 4 + (x & 3)] - 7.5) * 2;
+            data[offset] = Math.max(0, Math.min(255, data[offset] + adjustment));
+            data[offset + 1] = Math.max(0, Math.min(255, data[offset + 1] + adjustment));
+            data[offset + 2] = Math.max(0, Math.min(255, data[offset + 2] + adjustment));
+        }
+    }
+}
+
+function loadImageElement(url) {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = url;
+    });
+}
+
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function showGifResult(message, isError = false) {
+    elements.gifResult.textContent = message;
+    elements.gifResult.classList.remove('hidden');
+    elements.gifResult.classList.toggle('error', isError);
+}
+
+function clampNumber(value, min, max, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.min(max, Math.max(min, Math.round(number))) : fallback;
+}
+
+function formatBytes(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ============================================
+// 選択画像の書き出し
+// ============================================
+let webpWorker = null;
+let webpRequestId = 0;
+const webpRequests = new Map();
+
+function updateWebpExportOptions() {
+    const isWebp = elements.exportImageFormat.value === 'webp';
+    const isLossless = elements.webpMode.value === 'lossless';
+    elements.webpExportOptions.classList.toggle('hidden', !isWebp);
+    elements.webpQualityLabel.textContent = isLossless ? '圧縮率' : 'Quality';
+    elements.webpOptionHint.textContent = isLossless
+        ? 'Losslessでは画質は変化せず、圧縮率を上げるほど処理時間が長くなります。Effortは0（高速）～6（高圧縮）です。'
+        : 'Qualityは画質、Effortは0（高速）～6（高圧縮）です。';
+}
+
+function getWebpWorker() {
+    if (webpWorker) return webpWorker;
+    webpWorker = new Worker('webp-worker.js', { type: 'module' });
+    webpWorker.addEventListener('message', event => {
+        const request = webpRequests.get(event.data.id);
+        if (!request) return;
+        webpRequests.delete(event.data.id);
+        if (event.data.error) request.reject(new Error(event.data.error));
+        else request.resolve(event.data.buffer);
+    });
+    webpWorker.addEventListener('error', event => {
+        const error = event.error || new Error(event.message || 'WebPエンコーダーを起動できませんでした');
+        webpRequests.forEach(request => request.reject(error));
+        webpRequests.clear();
+        webpWorker?.terminate();
+        webpWorker = null;
+    });
+    return webpWorker;
+}
+
+function encodeWebpInWorker(imageData, options) {
+    return new Promise((resolve, reject) => {
+        const id = ++webpRequestId;
+        webpRequests.set(id, { resolve, reject });
+        try {
+            getWebpWorker().postMessage({
+                id,
+                width: imageData.width,
+                height: imageData.height,
+                rgbaBuffer: imageData.data.buffer,
+                options
+            }, [imageData.data.buffer]);
+        } catch (error) {
+            webpRequests.delete(id);
+            reject(error);
+        }
+    });
+}
+
+function stopWebpWorker() {
+    if (webpWorker) {
+        webpWorker.terminate();
+        webpWorker = null;
+    }
+}
+
+async function exportImages() {
     if (state.previewFrames.length === 0) {
         await generatePreview();
     }
@@ -1193,33 +1743,88 @@ async function exportPNG() {
     const exportFrames = getSelectedFrames();
     if (exportFrames.length === 0) return;
 
-    elements.progressContainer.classList.remove('hidden');
-    elements.progressText.textContent = 'ZIPを生成中...';
-    elements.progressFill.style.width = '0%';
+    const format = elements.exportImageFormat.value;
+    const formatLabel = format === 'original' ? '元画像' : format.toUpperCase();
+    showProgress(`${formatLabel}を準備中...`, elements.btnExport);
 
-    const zip = new JSZip();
+    try {
+        const zip = new JSZip();
 
-    for (let i = 0; i < exportFrames.length; i++) {
-        const frame = exportFrames[i];
-        const base64Data = frame.dataUrl.split(',')[1];
-        const filename = `frame_${String(frame.index).padStart(4, '0')}.png`;
-        zip.file(filename, base64Data, { base64: true });
+        for (let i = 0; i < exportFrames.length; i++) {
+            const frame = exportFrames[i];
+            updateProgress((i / exportFrames.length) * 80, `${formatLabel}を変換中... ${i + 1} / ${exportFrames.length}`);
+            const exported = await prepareExportImage(frame, format, i);
+            zip.file(exported.filename, exported.data, exported.options);
 
-        const progress = ((i + 1) / exportFrames.length) * 100;
-        elements.progressFill.style.width = `${progress}%`;
+            const progress = ((i + 1) / exportFrames.length) * 80;
+            updateProgress(progress, `${formatLabel}を準備中... ${i + 1} / ${exportFrames.length}`);
+            if (i % 5 === 0) await nextPaint();
+        }
+
+        updateProgress(80, 'ZIPを生成中...');
+        const content = await zip.generateAsync({ type: 'blob' }, metadata => {
+            updateProgress(80 + metadata.percent * 0.2, `ZIPを生成中... ${Math.round(metadata.percent)}%`);
+        });
+        updateProgress(100, 'ダウンロードを開始します...');
+        downloadBlob(content, `frames_${Date.now()}.zip`);
+    } catch (error) {
+        console.error(error);
+        window.alert(`画像を書き出せませんでした: ${error.message}`);
+    } finally {
+        hideProgress();
+        elements.btnExport.disabled = getSelectedFrames().length === 0;
+    }
+}
+
+async function prepareExportImage(frame, format, outputIndex) {
+    const prefix = String(outputIndex + 1).padStart(4, '0');
+    if (format === 'original') {
+        const filename = frame.sourceType === 'image'
+            ? `${prefix}_${frame.name}`
+            : `frame_${String(frame.index).padStart(4, '0')}.png`;
+        if (frame.file) return { filename, data: frame.file };
+        return {
+            filename,
+            data: frame.dataUrl.split(',')[1],
+            options: { base64: true }
+        };
     }
 
-    const content = await zip.generateAsync({ type: 'blob' });
+    const blob = await convertFrameImage(frame, format);
+    const baseName = (frame.name || `frame_${String(frame.index).padStart(4, '0')}`)
+        .replace(/\.[^.]+$/, '');
+    return {
+        filename: `${prefix}_${baseName}.${format}`,
+        data: blob
+    };
+}
 
-    // ダウンロード
-    const url = URL.createObjectURL(content);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `frames_${Date.now()}.zip`;
-    a.click();
-    URL.revokeObjectURL(url);
+async function convertFrameImage(frame, format) {
+    const image = await loadImageElement(frame.dataUrl);
+    const canvas = document.createElement('canvas');
+    canvas.width = frame.width || image.naturalWidth;
+    canvas.height = frame.height || image.naturalHeight;
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    if (format === 'webp') {
+        const lossless = elements.webpMode.value === 'lossless';
+        const options = {
+            lossless: lossless ? 1 : 0,
+            quality: clampNumber(elements.webpQuality.value, 0, 100, 90),
+            method: clampNumber(elements.webpEffort.value, 0, 6, 4),
+            alpha_quality: 100,
+            exact: lossless ? 1 : 0
+        };
+        elements.webpQuality.value = options.quality;
+        elements.webpEffort.value = options.method;
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        const buffer = await encodeWebpInWorker(imageData, options);
+        return new Blob([buffer], { type: 'image/webp' });
+    }
 
-    elements.progressContainer.classList.add('hidden');
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (!blob || blob.type !== 'image/png') throw new Error('PNGへの変換に対応していません');
+    return blob;
 }
 
 // ============================================
