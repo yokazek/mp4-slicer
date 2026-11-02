@@ -19,7 +19,7 @@
         <header class="header">
             <div class="header-content">
                 <h1><i data-lucide="film" class="icon-header"></i> mp4 Slicer</h1>
-                <p class="subtitle">動画からフレームを抽出してPNGに変換</p>
+                <p class="subtitle">動画から連番画像へ。画像をまとめて加工して、PNG・WebP・GIFで保存。</p>
             </div>
             <div class="theme-toggle">
                 <button id="btn-theme" class="btn-theme" title="テーマ切り替え">
@@ -30,46 +30,34 @@
             </div>
         </header>
 
-        <!-- 画像からアニメーションを作成 -->
-        <section class="image-import-section">
-            <div id="image-drop-zone" class="image-drop-zone" tabindex="0" role="button">
-                <i data-lucide="images" class="drop-icon"></i>
+        <section id="import-section" class="image-import-section">
+            <div id="media-drop-zone" class="image-drop-zone" tabindex="0" role="group" aria-label="動画・連番画像の読み込み">
+                <i data-lucide="upload" class="drop-icon"></i>
                 <div>
-                    <h2>画像からアニメーションを作成</h2>
-                    <p>画像リストまたは画像入りフォルダーをドラッグ＆ドロップ</p>
+                    <h2>動画・連番画像を読み込む</h2>
+                    <p>動画1本、複数の画像、または画像フォルダーをドロップ</p>
                 </div>
                 <div class="image-import-actions">
-                    <button id="btn-select-images" class="preview-tool-button" type="button">画像を選択</button>
-                    <button id="btn-select-folder" class="preview-tool-button" type="button">フォルダーを選択</button>
+                    <button id="btn-select-files" class="preview-tool-button" type="button">ファイルを選択</button>
+                    <button id="btn-select-folder" class="preview-tool-button" type="button">画像フォルダーを選択</button>
                 </div>
             </div>
-            <input id="image-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" multiple hidden>
+            <input id="media-file-input" type="file" accept="video/*,image/png,image/jpeg,image/webp,image/gif,image/bmp" multiple hidden>
             <input id="image-folder-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" webkitdirectory multiple hidden>
-            <p id="image-import-status" class="info-text image-import-status">PNG / JPEG / WebP / GIF / BMP に対応</p>
+            <p id="image-import-status" class="info-text image-import-status" role="status">動画はフレーム抽出へ、画像は編集へ進みます。画像: PNG / JPEG / WebP / GIF / BMP</p>
         </section>
 
-        <!-- 統合エディタ（常時表示） -->
-        <section id="editor-section" class="editor-section">
+        <!-- 動画を読み込んだ場合だけ抽出設定を表示 -->
+        <section id="editor-section" class="editor-section hidden">
+            <h2><i data-lucide="film" class="icon-section"></i> 動画からフレームを抽出</h2>
+            <p class="info-text">切り抜き・時間範囲・抽出間隔を設定して、連番画像を作成します。</p>
             <div class="editor-layout">
                 <!-- 左側：動画プレビュー + クロップ -->
                 <div class="video-area">
                     <div class="video-container" id="video-container">
                         <video id="video-player" muted></video>
                         <canvas id="crop-overlay"></canvas>
-                        <!-- 動画未読み込み時のドロップゾーン -->
-                        <div id="video-drop-zone" class="video-drop-zone">
-                            <div class="drop-zone-content">
-                                <i data-lucide="upload" class="drop-icon"></i>
-                                <p>mp4をドラッグ＆ドロップ</p>
-                                <p class="drop-hint">または クリックして選択</p>
-                            </div>
-                        </div>
-                        <!-- 動画読み込み後の再アップロードボタン -->
-                        <button id="btn-reload-video" class="btn-reload-video hidden" title="別の動画を選択">
-                            <i data-lucide="folder-open"></i>
-                        </button>
                     </div>
-                    <input type="file" id="file-input" accept="video/mp4,video/*" hidden>
 
                     <!-- 時間範囲スライダー -->
                     <div id="time-controls" class="time-range-container hidden">
@@ -86,7 +74,7 @@
                             </div>
                         </div>
                         <div class="playback-controls">
-                            <button id="btn-play" class="btn-icon" title="再生/停止">
+                            <button id="btn-play" class="btn-icon" title="選択した時間範囲を再生／一時停止" aria-label="選択した時間範囲を再生／一時停止">
                                 <i data-lucide="play" id="play-icon"></i>
                             </button>
                             <input type="range" id="playback-slider" min="0" max="100" value="0" step="0.1">
@@ -145,7 +133,7 @@
 
                     <!-- 間隔設定 -->
                     <div class="settings-group">
-                        <h3><i data-lucide="layers" class="icon-section"></i> フレーム間隔</h3>
+                        <h3><i data-lucide="layers" class="icon-section"></i> 抽出間隔</h3>
                         <div class="interval-container">
                             <input type="number" id="interval-value" min="0.001" step="0.001" value="1.0">
                             <span>秒ごと</span>
@@ -158,13 +146,61 @@
                     <!-- アクションボタン -->
                     <div class="action-buttons">
                         <button id="btn-preview" class="btn-primary" disabled>
-                            <i data-lucide="eye" class="icon-btn"></i> プレビュー生成
+                            <i data-lucide="eye" class="icon-btn"></i> フレームを抽出
                         </button>
-                        <label class="export-format-control">画像の出力形式
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- プレビューギャラリー -->
+        <section id="preview-section" class="preview-section hidden">
+            <div class="preview-heading">
+                <h2><i data-lucide="image" class="icon-section"></i> 2 連番画像を編集・保存 <span id="preview-count">(0 フレーム)</span></h2>
+
+            </div>
+            <p id="extraction-status" class="info-text" role="status"></p>
+            <div class="edit-export-layout">
+                <section class="output-preview-panel">
+                    <h3>加工後プレビュー</h3>
+                    <div id="flipbook-player" class="flipbook-player hidden">
+                        <img id="flipbook-image" src="" alt="選択画像の加工後アニメーション">
+                    </div>
+                    <canvas id="output-preview" width="480" height="320" aria-label="選択画像の加工後プレビュー"></canvas>
+                    <div class="flipbook-controls" role="group" aria-label="加工後プレビューの再生操作">
+                        <button id="btn-preview-prev" class="preview-tool-button" type="button" disabled>前のコマ</button>
+                        <button id="btn-flipbook-play" class="preview-tool-button" type="button" disabled>再生</button>
+                        <button id="btn-preview-next" class="preview-tool-button" type="button" disabled>次のコマ</button>
+                        <button id="btn-flipbook-close" class="preview-tool-button" type="button" disabled>先頭に戻す</button>
+                        <span id="playback-speed-label">6 fps</span>
+                        <span id="flipbook-info" aria-live="off"></span>
+                    </div>
+                    <label class="preview-include-control"><input id="preview-frame-included" type="checkbox" disabled> このフレームを書き出す</label>
+                    <p class="info-text">コマ送りでは除外した画像も確認できます。チェックを外すと書き出し・連続再生から除外します。</p>
+                    <p id="output-preview-info" class="info-text" aria-live="polite">画像を選択してください</p>
+                    <p class="info-text">サイズ・収め方・背景を確認できます。圧縮やGIFの減色前の表示です。</p>
+                </section>
+                <div class="output-settings">
+                    <section class="settings-group">
+                        <h3>共通の加工設定</h3>
+                        <p class="info-text">選択した全画像に適用します。元画像は保持されます。</p>
+                        <div class="gif-settings-grid">
+                            <label class="settings-wide">サイズ<select id="output-size-mode"><option value="source">各画像のサイズを維持</option><option value="fixed">共通サイズを指定</option></select></label>
+                            <label>幅（px）<input id="output-width" type="number" min="1" max="4096" value="480"></label>
+                            <label>高さ（px）<input id="output-height" type="number" min="1" max="4096" value="320"></label>
+                            <label class="checkbox-label"><input id="output-lock-ratio" type="checkbox" checked> 比率を固定</label>
+                            <label class="settings-wide">収め方<select id="output-fit"><option value="contain">全体を収める（余白あり）</option><option value="cover">中央で切り抜く（余白なし）</option><option value="stretch">指定サイズに伸縮</option></select></label>
+                            <label>背景色<input id="output-background" type="color" value="#ffffff"></label>
+                            <label class="checkbox-label settings-wide"><input id="output-transparent" type="checkbox" checked> 透明な背景（PNG・WebP）</label>
+                        </div>
+                        <p id="output-size-hint" class="info-text"></p>
+                    </section>
+                    <section class="settings-group">
+                        <h3>書き出し</h3>
+                        <label class="export-format-control">出力形式
                             <select id="export-image-format">
-                                <option value="original">元の形式</option>
-                                <option value="png">PNG</option>
-                                <option value="webp">WebP</option>
+                                <option value="png">PNG（連番画像・ZIP）</option>
+                                <option value="webp">WebP（連番画像・ZIP）</option><option value="gif">GIF（アニメーション）</option>
                             </select>
                         </label>
                         <div id="webp-export-options" class="webp-export-options hidden">
@@ -183,81 +219,40 @@
                             <p id="webp-option-hint" class="info-text">Qualityは画質、Effortは圧縮時間と容量のバランスです。</p>
                         </div>
                         <button id="btn-export" class="btn-success" disabled>
-                            <i data-lucide="download" class="icon-btn"></i> 選択フレームをダウンロード
+                            <i data-lucide="download" class="icon-btn"></i> PNGを保存（ZIP）
                         </button>
-                    </div>
+
+                        <div id="gif-export-panel" class="hidden">
+                            <div class="gif-settings-grid">
+                                <label>再生速度（fps）<input id="gif-fps" type="number" min="1" max="50" value="6"></label>
+                                <label>ループ<select id="gif-repeat"><option value="0">無限</option><option value="-1">1回だけ</option><option value="1">2回再生</option><option value="2">3回再生</option><option value="4">5回再生</option><option value="9">10回再生</option></select></label>
+                            </div>
+                            <details><summary>GIFの詳細設定</summary><div class="gif-settings-grid">
+                                <label>色数<input id="gif-colors" type="number" min="2" max="256" value="256"></label>
+                                <label class="checkbox-label"><input id="gif-dither" type="checkbox" checked> ディザリング</label>
+                            </div></details>
+                            <p class="info-text">GIFは共通サイズと背景色を使用します。抽出間隔と再生速度は別の設定です。</p>
+                            <div class="gif-actions"><button id="btn-export-gif" class="btn-success" type="button" disabled>GIFを保存</button><button id="btn-cancel-gif" class="btn-secondary hidden" type="button">キャンセル</button></div>
+                            <p id="gif-result" class="gif-result hidden" role="status"></p>
+                        </div>
+                        <p id="gif-estimate" class="info-text" aria-live="polite"></p>
+                    </section>
                 </div>
             </div>
-        </section>
-
-        <!-- プレビューギャラリー -->
-        <section id="preview-section" class="preview-section hidden">
-            <div class="preview-heading">
-                <h2><i data-lucide="image" class="icon-section"></i> プレビュー <span id="preview-count">(0 フレーム)</span></h2>
-                <button id="btn-selection-mode" class="preview-tool-button" type="button" aria-pressed="false">
-                    <i data-lucide="list-checks" class="icon-btn"></i> 取捨選択モード: OFF
-                </button>
-            </div>
-            <div id="selection-toolbar" class="selection-toolbar hidden">
+            <div id="selection-toolbar" class="selection-toolbar">
                 <span id="selection-count">0 / 0 フレーム選択</span>
                 <div class="selection-actions">
                     <button id="btn-select-all" class="preview-tool-button" type="button">すべて選択</button>
                     <button id="btn-select-none" class="preview-tool-button" type="button">すべて解除</button>
-                    <button id="btn-flipbook" class="preview-tool-button" type="button">
-                        <i data-lucide="play" class="icon-btn"></i> パラパラ漫画
-                    </button>
                 </div>
             </div>
-            <p id="preview-hint" class="preview-hint">クリックで実サイズ表示</p>
-            <div id="flipbook-player" class="flipbook-player hidden">
-                <img id="flipbook-image" src="" alt="選択フレームのパラパラ漫画">
-                <div class="flipbook-controls">
-                    <button id="btn-flipbook-play" class="preview-tool-button" type="button">再生</button>
-                    <label>速度 <input id="flipbook-fps" type="number" min="1" max="60" value="6"> fps</label>
-                    <span id="flipbook-info"></span>
-                    <button id="btn-flipbook-close" class="preview-tool-button" type="button">閉じる</button>
-                </div>
+            <div class="timeline-position">
+                <label for="timeline-seek">表示位置</label>
+                <input id="timeline-seek" type="range" min="0" max="0" value="0" step="1" disabled>
+                <span id="timeline-position-label">0 / 0 コマ</span>
             </div>
-            <div id="gif-export-panel" class="gif-export-panel">
-                <div class="gif-panel-heading">
-                    <h3><i data-lucide="clapperboard" class="icon-section"></i> アニメーションGIF</h3>
-                    <span id="gif-estimate" class="info-text"></span>
-                </div>
-                <div class="gif-settings-grid">
-                    <label>幅 <input id="gif-width" type="number" min="1" max="4096" value="480"></label>
-                    <label>高さ <input id="gif-height" type="number" min="1" max="4096" value="320"></label>
-                    <label class="checkbox-label"><input id="gif-lock-ratio" type="checkbox" checked> 比率を固定</label>
-                    <label>速度 <input id="gif-fps" type="number" min="1" max="60" value="6"> fps</label>
-                    <label>色数 <input id="gif-colors" type="number" min="2" max="256" value="256"></label>
-                    <label>リサイズ
-                        <select id="gif-fit">
-                            <option value="contain">比率を保って収める</option>
-                            <option value="cover">比率を保って切り抜く</option>
-                            <option value="stretch">指定サイズに伸縮</option>
-                        </select>
-                    </label>
-                    <label>背景色 <input id="gif-background" type="color" value="#ffffff"></label>
-                    <label>全体ループ
-                        <select id="gif-repeat">
-                            <option value="0">無限</option>
-                            <option value="-1">1回だけ</option>
-                            <option value="1">2回再生</option>
-                            <option value="2">3回再生</option>
-                            <option value="4">5回再生</option>
-                            <option value="9">10回再生</option>
-                        </select>
-                    </label>
-                    <label class="checkbox-label"><input id="gif-dither" type="checkbox" checked> ディザリング</label>
-                </div>
-                <div class="gif-actions">
-                    <button id="btn-export-gif" class="btn-success" type="button" disabled>
-                        <i data-lucide="download" class="icon-btn"></i> 選択画像からGIFを作成
-                    </button>
-                    <button id="btn-cancel-gif" class="btn-secondary hidden" type="button">キャンセル</button>
-                </div>
-                <p id="gif-result" class="gif-result hidden"></p>
-            </div>
-            <div id="preview-gallery" class="preview-gallery"></div>
+            <p id="preview-hint" class="preview-hint">横にスクロールして画像をクリックすると、そのコマを表示します。チェックで書き出し対象を選択、左右の矢印で順序変更、「拡大」で詳細を確認できます。</p>
+            <div id="preview-gallery" class="preview-gallery" role="group" aria-label="フレームタイムライン"></div>
         </section>
 
         <!-- 実サイズ表示モーダル -->

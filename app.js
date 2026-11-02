@@ -31,9 +31,8 @@ const state = {
 
     // プレビューフレーム
     previewFrames: [],
-    selectionMode: false,
     imageObjectUrls: [],
-    gifAspectRatio: 1,
+    outputAspectRatio: 1,
     gifCancelled: false,
     activeProgressButton: null,
     activeProgressButtonWasDisabled: false,
@@ -104,17 +103,15 @@ function applyTheme(theme) {
 // DOM要素
 // ============================================
 const elements = {
-    // 画像入力
-    imageDropZone: document.getElementById('image-drop-zone'),
-    imageFileInput: document.getElementById('image-file-input'),
+    // 動画・画像の共通入力
+    mediaDropZone: document.getElementById('media-drop-zone'),
+    mediaFileInput: document.getElementById('media-file-input'),
     imageFolderInput: document.getElementById('image-folder-input'),
-    btnSelectImages: document.getElementById('btn-select-images'),
+    btnSelectFiles: document.getElementById('btn-select-files'),
     btnSelectFolder: document.getElementById('btn-select-folder'),
     imageImportStatus: document.getElementById('image-import-status'),
 
-    // ドロップゾーン（動画コンテナ内）
-    videoDropZone: document.getElementById('video-drop-zone'),
-    fileInput: document.getElementById('file-input'),
+    // 動画の時間操作
     timeControls: document.getElementById('time-controls'),
 
     // エディター
@@ -171,32 +168,38 @@ const elements = {
     previewSection: document.getElementById('preview-section'),
     previewCount: document.getElementById('preview-count'),
     previewGallery: document.getElementById('preview-gallery'),
+    timelineSeek: document.getElementById('timeline-seek'),
+    timelinePositionLabel: document.getElementById('timeline-position-label'),
     previewHint: document.getElementById('preview-hint'),
-    btnSelectionMode: document.getElementById('btn-selection-mode'),
     selectionToolbar: document.getElementById('selection-toolbar'),
     selectionCount: document.getElementById('selection-count'),
     btnSelectAll: document.getElementById('btn-select-all'),
     btnSelectNone: document.getElementById('btn-select-none'),
-    btnFlipbook: document.getElementById('btn-flipbook'),
     flipbookPlayer: document.getElementById('flipbook-player'),
     flipbookImage: document.getElementById('flipbook-image'),
     flipbookInfo: document.getElementById('flipbook-info'),
-    flipbookFps: document.getElementById('flipbook-fps'),
     btnFlipbookPlay: document.getElementById('btn-flipbook-play'),
     btnFlipbookClose: document.getElementById('btn-flipbook-close'),
+    btnPreviewPrev: document.getElementById('btn-preview-prev'),
+    btnPreviewNext: document.getElementById('btn-preview-next'),
+    previewFrameIncluded: document.getElementById('preview-frame-included'),
     progressContainer: document.getElementById('progress-container'),
     progressFill: document.getElementById('progress-fill'),
     progressText: document.getElementById('progress-text'),
     progressPercent: document.getElementById('progress-percent'),
 
-    // GIF出力
-    gifWidth: document.getElementById('gif-width'),
-    gifHeight: document.getElementById('gif-height'),
-    gifLockRatio: document.getElementById('gif-lock-ratio'),
+    outputSizeMode: document.getElementById('output-size-mode'),
+    outputTransparent: document.getElementById('output-transparent'),
+    outputPreview: document.getElementById('output-preview'),
+    outputPreviewInfo: document.getElementById('output-preview-info'),
+    // 共通加工・GIF出力
+    outputWidth: document.getElementById('output-width'),
+    outputHeight: document.getElementById('output-height'),
+    outputLockRatio: document.getElementById('output-lock-ratio'),
     gifFps: document.getElementById('gif-fps'),
     gifColors: document.getElementById('gif-colors'),
-    gifFit: document.getElementById('gif-fit'),
-    gifBackground: document.getElementById('gif-background'),
+    outputFit: document.getElementById('output-fit'),
+    outputBackground: document.getElementById('output-background'),
     gifRepeat: document.getElementById('gif-repeat'),
     gifDither: document.getElementById('gif-dither'),
     gifEstimate: document.getElementById('gif-estimate'),
@@ -216,8 +219,7 @@ const elements = {
 // ============================================
 function init() {
     initTheme();
-    setupImageImport();
-    setupDropZone();
+    setupMediaImport();
     setupCropOverlay();
     setupTimeRange();
     setupSettings();
@@ -231,37 +233,43 @@ function init() {
 const supportedImagePattern = /\.(png|jpe?g|webp|gif|bmp)$/i;
 const naturalFileCollator = new Intl.Collator('ja', { numeric: true, sensitivity: 'base' });
 
-function setupImageImport() {
-    const { imageDropZone, imageFileInput, imageFolderInput, btnSelectImages, btnSelectFolder } = elements;
+function setupMediaImport() {
+    const { mediaDropZone, mediaFileInput, imageFolderInput, btnSelectFiles, btnSelectFolder } = elements;
 
-    btnSelectImages.addEventListener('click', (event) => {
+    btnSelectFiles.addEventListener('click', (event) => {
         event.stopPropagation();
-        imageFileInput.click();
+        mediaFileInput.click();
     });
     btnSelectFolder.addEventListener('click', (event) => {
         event.stopPropagation();
         imageFolderInput.click();
     });
-    imageDropZone.addEventListener('click', () => imageFileInput.click());
-    imageDropZone.addEventListener('keydown', (event) => {
+    mediaDropZone.addEventListener('click', () => mediaFileInput.click());
+    mediaDropZone.addEventListener('keydown', (event) => {
+        if (event.target !== mediaDropZone) return;
         if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            imageFileInput.click();
+            mediaFileInput.click();
         }
     });
-    imageDropZone.addEventListener('dragover', (event) => {
+    mediaDropZone.addEventListener('dragover', (event) => {
         event.preventDefault();
-        imageDropZone.classList.add('drag-over');
+        mediaDropZone.classList.add('drag-over');
     });
-    imageDropZone.addEventListener('dragleave', () => imageDropZone.classList.remove('drag-over'));
-    imageDropZone.addEventListener('drop', async (event) => {
+    mediaDropZone.addEventListener('dragleave', event => {
+        if (event.relatedTarget && mediaDropZone.contains(event.relatedTarget)) return;
+        mediaDropZone.classList.remove('drag-over');
+    });
+    mediaDropZone.addEventListener('drop', async (event) => {
         event.preventDefault();
-        imageDropZone.classList.remove('drag-over');
-        await handleImageDrop(event.dataTransfer);
+        event.stopPropagation();
+        if (document.body.classList.contains('is-processing')) return;
+        mediaDropZone.classList.remove('drag-over');
+        await handleMediaDrop(event.dataTransfer);
     });
 
-    imageFileInput.addEventListener('change', async (event) => {
-        await loadImageFiles(Array.from(event.target.files));
+    mediaFileInput.addEventListener('change', async (event) => {
+        await loadMediaFiles(Array.from(event.target.files));
         event.target.value = '';
     });
     imageFolderInput.addEventListener('change', async (event) => {
@@ -270,7 +278,7 @@ function setupImageImport() {
     });
 }
 
-async function handleImageDrop(dataTransfer) {
+async function handleMediaDrop(dataTransfer) {
     const items = Array.from(dataTransfer.items || []);
     const entries = items.map(item => item.webkitGetAsEntry?.()).filter(Boolean);
     let files;
@@ -281,7 +289,7 @@ async function handleImageDrop(dataTransfer) {
         files = Array.from(dataTransfer.files || []);
     }
 
-    await loadImageFiles(files);
+    await loadMediaFiles(files);
 }
 
 async function readDroppedEntry(entry, parentPath = '') {
@@ -368,15 +376,10 @@ async function loadImageFiles(files) {
 
     state.sourceMode = 'image';
     state.previewFrames = frames;
-    state.selectionMode = true;
-    elements.previewSection.classList.add('selection-mode');
-    elements.selectionToolbar.classList.remove('hidden');
-    elements.btnSelectionMode.setAttribute('aria-pressed', 'true');
-    elements.btnSelectionMode.classList.add('active');
-    elements.btnSelectionMode.lastChild.textContent = ' 取捨選択モード: ON';
-    elements.previewHint.textContent = 'クリックで選択・非選択を切り替え（グレーは書き出し対象外）';
-    elements.btnExport.textContent = '選択画像をダウンロード';
-    initializeGifSize(frames[0]);
+    updateExtractionStatus();
+    elements.videoPlayer.pause();
+    elements.editorSection.classList.add('hidden');
+    initializeOutputSize(frames[0]);
     displayPreview(frames);
     updateGifEstimate();
 
@@ -413,8 +416,11 @@ function nextPaint() {
 }
 
 function showProgress(message, button = null) {
+    stopFlipbook();
+    state.processingControls = [...document.querySelectorAll('button, input, select')].filter(control => control.id !== 'btn-cancel-gif').map(control => [control, control.disabled]);
+    state.processingControls.forEach(([control]) => { control.disabled = true; });
     state.activeProgressButton = button;
-    state.activeProgressButtonWasDisabled = button?.disabled || false;
+    state.activeProgressButtonWasDisabled = state.processingControls.find(([control]) => control === button)?.[1] || false;
     elements.progressContainer.classList.remove('hidden');
     elements.progressContainer.setAttribute('aria-hidden', 'false');
     document.body.classList.add('is-processing');
@@ -447,85 +453,32 @@ function hideProgress() {
         button.removeAttribute('aria-busy');
         button.disabled = state.activeProgressButtonWasDisabled;
     }
+    state.processingControls?.forEach(([control, disabled]) => { control.disabled = disabled; });
+    state.processingControls = null;
     state.activeProgressButton = null;
     state.activeProgressButtonWasDisabled = false;
 }
 
 // ============================================
-// ドラッグ＆ドロップ（動画コンテナ内）
+// 読み込んだ素材を種類に応じて振り分ける
 // ============================================
-function setupDropZone() {
-    const { videoDropZone, fileInput, videoContainer } = elements;
-    const btnReloadVideo = document.getElementById('btn-reload-video');
-
-    // ドロップゾーンのクリックでファイル選択
-    videoDropZone.addEventListener('click', () => fileInput.click());
-
-    // ドロップゾーンのドラッグオーバー
-    videoDropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        videoDropZone.classList.add('drag-over');
-    });
-
-    // ドロップゾーンのドラッグリーブ
-    videoDropZone.addEventListener('dragleave', () => {
-        videoDropZone.classList.remove('drag-over');
-    });
-
-    // ドロップゾーンのドロップ
-    videoDropZone.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        videoDropZone.classList.remove('drag-over');
-        const file = e.dataTransfer.files[0];
-        if (file && file.type.startsWith('video/')) {
-            loadVideo(file);
-        } else {
-            await handleImageDrop(e.dataTransfer);
-        }
-    });
-
-    // 動画コンテナ全体へのD&D（動画読み込み後も有効）
-    videoContainer.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        // ドロップゾーンが非表示の場合は動画コンテナにスタイルを適用
-        if (videoDropZone.classList.contains('hidden')) {
-            videoContainer.classList.add('drag-over');
-        }
-    });
-
-    videoContainer.addEventListener('dragleave', (e) => {
-        // 子要素への移動の場合は無視
-        if (e.relatedTarget && videoContainer.contains(e.relatedTarget)) return;
-        videoContainer.classList.remove('drag-over');
-    });
-
-    videoContainer.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        videoContainer.classList.remove('drag-over');
-        const file = e.dataTransfer.files[0];
-        if (file && file.type.startsWith('video/')) {
-            loadVideo(file);
-        } else {
-            await handleImageDrop(e.dataTransfer);
-        }
-    });
-
-    // 再アップロードボタンのクリック
-    btnReloadVideo.addEventListener('click', () => fileInput.click());
-
-    // ファイル入力変更
-    fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) loadVideo(file);
-    });
+// 動画1本、または連番画像を同じ入口で受け付ける。
+async function loadMediaFiles(files) {
+    if (files.length === 0) return;
+    const videos = files.filter(file => file.type.startsWith('video/') || /\.(mp4|webm|mov|m4v|ogv)$/i.test(file.name));
+    if (videos.length > 1 || (videos.length && files.some(isSupportedImage))) {
+        showImageImportStatus('動画は1本ずつ、連番画像とは分けて読み込んでください。', true);
+        return;
+    }
+    if (videos.length) loadVideo(videos[0]);
+    else await loadImageFiles(files);
 }
 
-// ============================================
-// 動画読み込み
-// ============================================
 function loadVideo(file) {
+    showImageImportStatus(`${file.name} を読み込み中...`);
     releaseImageObjectUrls();
     state.sourceMode = 'video';
+    elements.editorSection.classList.remove('hidden');
     const url = URL.createObjectURL(file);
     const video = elements.videoPlayer;
 
@@ -550,6 +503,8 @@ function loadVideo(file) {
     });
 
     video.onloadedmetadata = () => {
+        // 一部の動画ではシーク後にも通知されるため、編集状態の初期化は一度だけ行う。
+        video.onloadedmetadata = null;
         state.video = video;
         state.videoWidth = video.videoWidth;
         state.videoHeight = video.videoHeight;
@@ -569,42 +524,49 @@ function loadVideo(file) {
         updateFrameCountInfo();
 
         // ドロップゾーンを非表示にして時間コントロールを表示
-        elements.videoDropZone.classList.add('hidden');
         elements.timeControls.classList.remove('hidden');
-
-        // 再アップロードボタンを表示
-        const btnReloadVideo = document.getElementById('btn-reload-video');
-        btnReloadVideo.classList.remove('hidden');
 
         // プレビューをリセット
         state.previewFrames = [];
-        state.selectionMode = false;
-        stopFlipbook();
-        elements.btnSelectionMode.setAttribute('aria-pressed', 'false');
-        elements.btnSelectionMode.classList.remove('active');
-        elements.btnSelectionMode.lastChild.textContent = ' 取捨選択モード: OFF';
-        elements.previewSection.classList.remove('selection-mode');
-        elements.selectionToolbar.classList.add('hidden');
-        elements.flipbookPlayer.classList.add('hidden');
-        elements.previewHint.textContent = 'クリックで実サイズ表示';
+        closeFlipbook();
         elements.previewGallery.innerHTML = '';
         elements.previewSection.classList.add('hidden');
         elements.btnExport.disabled = true;
-        elements.btnExport.innerHTML = '<i data-lucide="download" class="icon-btn"></i> 選択フレームをダウンロード';
+        updateWebpExportOptions();
         elements.btnExportGif.disabled = true;
 
         // プレビューボタンを有効化
         elements.btnPreview.disabled = false;
+
+        showImageImportStatus(`動画: ${file.name}`);
+        elements.editorSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
         // クロップオーバーレイを初期化
         resizeCropOverlay();
         drawCropOverlay();
     };
 
+    video.onerror = () => showImageImportStatus('動画を読み込めませんでした。対応形式の動画を選択してください。', true);
+
     video.ontimeupdate = () => {
+        constrainVideoPlayback();
         const pct = (video.currentTime / state.duration) * 100;
         elements.playbackSlider.value = pct;
         elements.timeCurrentLabel.textContent = formatTime(video.currentTime);
+    };
+    video.onplay = () => {
+        elements.btnPlay.textContent = '⏸';
+        cancelAnimationFrame(videoPlaybackRequest);
+        monitorVideoPlayback();
+    };
+    video.onpause = () => {
+        cancelAnimationFrame(videoPlaybackRequest);
+        elements.btnPlay.textContent = '▶';
+    };
+    video.onended = () => {
+        if (!video.ended || !(state.timeRange.end > state.timeRange.start)) return;
+        video.currentTime = state.timeRange.start;
+        video.play().catch(() => { elements.btnPlay.textContent = '▶'; });
     };
 }
 
@@ -925,6 +887,7 @@ function getAspectRatioValue() {
 }
 
 function updateCropInputs() {
+    updateExtractionStatus();
     elements.cropX.value = state.crop.x;
     elements.cropY.value = state.crop.y;
     elements.cropW.value = state.crop.w;
@@ -980,6 +943,8 @@ function onTimeRangeMove(e) {
 }
 
 function updateTimeLabels() {
+    constrainVideoPlayback();
+    updateExtractionStatus();
     elements.timeStartLabel.textContent = formatTime(state.timeRange.start);
     elements.timeEndLabel.textContent = formatTime(state.timeRange.end);
 
@@ -1001,11 +966,34 @@ function updateTimeInputs() {
     elements.durationInfo.textContent = `選択範囲: ${duration.toFixed(2)}秒`;
 }
 
+let videoPlaybackRequest = 0;
+
+// 停止中のシークやフレーム抽出には干渉せず、再生だけを範囲内に制限する。
+function constrainVideoPlayback() {
+    const video = elements.videoPlayer;
+    if (video.paused) return;
+    const { start, end } = state.timeRange;
+    if (video.currentTime >= end) {
+        video.currentTime = start;
+    } else if (video.currentTime < start) {
+        video.currentTime = start;
+    }
+}
+
+function monitorVideoPlayback() {
+    constrainVideoPlayback();
+    if (!elements.videoPlayer.paused) {
+        videoPlaybackRequest = requestAnimationFrame(monitorVideoPlayback);
+    }
+}
+
 function togglePlay() {
     const video = elements.videoPlayer;
     if (video.paused) {
-        video.play();
-        elements.btnPlay.textContent = '⏸';
+        const { start, end } = state.timeRange;
+        if (!(end > start)) return;
+        if (video.currentTime < start || video.currentTime >= end) video.currentTime = start;
+        video.play().catch(() => { elements.btnPlay.textContent = '▶'; });
     } else {
         video.pause();
         elements.btnPlay.textContent = '▶';
@@ -1071,7 +1059,8 @@ function setupSettings() {
 
     // 間隔設定
     elements.intervalValue.addEventListener('change', () => {
-        state.interval = parseFloat(elements.intervalValue.value) || 1.0;
+        state.interval = Math.max(0.001, parseFloat(elements.intervalValue.value) || 1.0);
+        elements.intervalValue.value = state.interval;
         updateFrameCountInfo();
     });
 
@@ -1180,6 +1169,7 @@ function applyCropRatio() {
 }
 
 function updateFrameCountInfo() {
+    updateExtractionStatus();
     const duration = state.timeRange.end - state.timeRange.start;
     // 動画の終了時刻には表示可能な新しいフレームがないため、終了点は含めない。
     const frameCount = Math.ceil(duration / state.interval);
@@ -1190,38 +1180,66 @@ function updateFrameCountInfo() {
 // フレーム抽出
 // ============================================
 function setupActions() {
-    elements.btnPreview.addEventListener('click', generatePreview);
+    elements.btnPreview.addEventListener('click', () => {
+        generatePreview().catch(error => window.alert(`フレームを抽出できませんでした: ${error.message}`));
+    });
     elements.btnExport.addEventListener('click', exportImages);
     elements.exportImageFormat.addEventListener('change', updateWebpExportOptions);
     elements.webpMode.addEventListener('change', updateWebpExportOptions);
-    elements.btnSelectionMode.addEventListener('click', toggleSelectionMode);
     elements.btnSelectAll.addEventListener('click', () => setAllFramesSelected(true));
     elements.btnSelectNone.addEventListener('click', () => setAllFramesSelected(false));
-    elements.btnFlipbook.addEventListener('click', openFlipbook);
     elements.btnFlipbookPlay.addEventListener('click', toggleFlipbookPlayback);
     elements.btnFlipbookClose.addEventListener('click', closeFlipbook);
-    elements.flipbookFps.addEventListener('change', restartFlipbookIfPlaying);
+    elements.btnPreviewPrev.addEventListener('click', () => stepPreview(-1));
+    elements.btnPreviewNext.addEventListener('click', () => stepPreview(1));
+    elements.timelineSeek.addEventListener('input', () => selectPreviewFrame(Number(elements.timelineSeek.value)));
+    document.querySelector('.preview-include-control').addEventListener('pointerdown', stopFlipbook);
+    elements.previewFrameIncluded.addEventListener('keydown', event => {
+        if (event.key === ' ') stopFlipbook();
+    });
+    elements.previewFrameIncluded.addEventListener('change', () => {
+        stopFlipbook();
+        const frame = getActivePreviewFrame();
+        if (!frame) return;
+        frame.selected = elements.previewFrameIncluded.checked;
+        updateSelectionUI();
+    });
     elements.btnExportGif.addEventListener('click', exportGif);
     elements.btnCancelGif.addEventListener('click', () => { state.gifCancelled = true; });
-    elements.gifWidth.addEventListener('input', () => updateGifDimension('width'));
-    elements.gifHeight.addEventListener('input', () => updateGifDimension('height'));
+    elements.outputWidth.addEventListener('change', () => updateOutputDimension('width'));
+    elements.outputHeight.addEventListener('change', () => updateOutputDimension('height'));
+    [elements.outputWidth, elements.outputHeight].forEach(input => input.addEventListener('input', refreshOutput));
     elements.gifFps.addEventListener('change', syncGifFps);
     elements.gifColors.addEventListener('change', updateGifEstimate);
+    [elements.outputSizeMode, elements.outputFit, elements.outputBackground, elements.outputTransparent].forEach(input => input.addEventListener('change', refreshOutput));
+    elements.outputLockRatio.addEventListener('change', () => {
+        state.outputAspectRatio = Number(elements.outputWidth.value) / Number(elements.outputHeight.value);
+    });
     updateWebpExportOptions();
 }
 
 async function generatePreview() {
+    if (!state.video) return;
+    const initializeSize = state.previewFrames.length === 0 || state.sourceMode !== 'video';
+    state.sourceMode = 'video';
+    closeFlipbook();
     const frames = await extractFrames(true);
-    if (frames.length > 0) initializeGifSize(frames[0]);
+    state.extractionSignature = extractionSignature();
+    updateExtractionStatus();
+    if (initializeSize && frames.length > 0) initializeOutputSize(frames[0]);
     displayPreview(frames);
     elements.btnExport.disabled = frames.length === 0;
 }
 
 async function extractFrames(isPreview = false) {
     const video = elements.videoPlayer;
+    video.pause();
     const { start, end } = state.timeRange;
     const { x, y, w, h } = state.crop;
     const interval = state.interval;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || !(interval > 0)) {
+        throw new Error('開始・終了時刻と抽出間隔を確認してください。');
+    }
 
     const frames = [];
     const times = [];
@@ -1240,37 +1258,45 @@ async function extractFrames(isPreview = false) {
     canvas.height = h;
     const ctx = canvas.getContext('2d');
 
-    for (let i = 0; i < times.length; i++) {
-        const t = times[i];
+    try {
+        for (let i = 0; i < times.length; i++) {
+            const t = times[i];
 
-        // 進捗更新
-        const progress = ((i + 1) / times.length) * 100;
-        updateProgress(progress, `フレームを抽出中... ${i + 1} / ${times.length}`);
+            // 進捗更新
+            const progress = ((i + 1) / times.length) * 100;
+            updateProgress(progress, `フレームを抽出中... ${i + 1} / ${times.length}`);
 
-        // フレーム取得
-        video.currentTime = t;
-        await new Promise(resolve => {
-            video.onseeked = resolve;
-        });
+            // フレーム取得
+            await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error('動画の読み取りがタイムアウトしました。')), 15000);
+                video.onseeked = () => { clearTimeout(timeout); resolve(); };
+                video.currentTime = t;
+            });
 
-        // クロップして描画
-        ctx.drawImage(video, x, y, w, h, 0, 0, w, h);
+            // クロップして描画
+            ctx.drawImage(video, x, y, w, h, 0, 0, w, h);
 
-        const dataUrl = canvas.toDataURL('image/png');
-        frames.push({
-            id: `video-${i}`,
-            sourceType: 'video',
-            name: `frame_${String(i + 1).padStart(4, '0')}.png`,
-            time: t,
-            dataUrl,
-            width: w,
-            height: h,
-            index: i + 1,
-            selected: true
-        });
+            const dataUrl = canvas.toDataURL('image/png');
+            frames.push({
+                id: `video-${i}`,
+                sourceType: 'video',
+                name: `frame_${String(i + 1).padStart(4, '0')}.png`,
+                time: t,
+                dataUrl,
+                width: w,
+                height: h,
+                index: i + 1,
+                selected: true
+            });
+        }
+
+    } catch (error) {
+        displayPreview(state.previewFrames);
+        throw error;
+    } finally {
+        video.onseeked = null;
+        hideProgress();
     }
-
-    hideProgress();
     state.previewFrames = frames;
 
     return frames;
@@ -1280,50 +1306,79 @@ function displayPreview(frames) {
     updateSelectionUI();
     elements.previewGallery.innerHTML = '';
 
-    frames.forEach(frame => {
+    frames.forEach((frame, position) => {
         const item = document.createElement('div');
         item.className = `preview-item${frame.selected ? '' : ' deselected'}`;
         item.dataset.frameIndex = frame.index;
         const image = document.createElement('img');
         image.src = frame.dataUrl;
         image.alt = frame.name || `Frame ${frame.index}`;
-        const mark = document.createElement('span');
-        mark.className = 'selection-mark';
-        mark.setAttribute('aria-hidden', 'true');
-        mark.textContent = '✓';
+        const mark = document.createElement('input');
+        mark.type = 'checkbox';
+        mark.className = 'frame-checkbox';
+        mark.checked = frame.selected !== false;
+        mark.setAttribute('aria-label', `${frame.name}を書き出す`);
+        mark.addEventListener('change', () => {
+            stopFlipbook();
+            frame.selected = mark.checked;
+            item.classList.toggle('deselected', !frame.selected);
+            updateSelectionUI();
+        });
+        image.tabIndex = 0;
+        image.setAttribute('role', 'button');
+        image.addEventListener('click', () => selectPreviewFrame(position));
+        image.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                selectPreviewFrame(position);
+            } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                event.preventDefault();
+                const next = Math.max(0, Math.min(frames.length - 1, position + (event.key === 'ArrowLeft' ? -1 : 1)));
+                selectPreviewFrame(next);
+                elements.previewGallery.children[next].querySelector('img').focus({ preventScroll: true });
+            }
+        });
+        const tick = document.createElement('div');
+        tick.className = 'frame-tick';
+        tick.textContent = `${position + 1}`;
+        tick.setAttribute('aria-hidden', 'true');
+        const expand = document.createElement('button');
+        expand.type = 'button';
+        expand.className = 'frame-expand';
+        expand.textContent = '拡大';
+        expand.setAttribute('aria-label', `${frame.name}を拡大`);
+        expand.addEventListener('click', () => showImageModal(frame));
         const label = document.createElement('div');
         label.className = 'frame-label';
         label.textContent = frame.sourceType === 'image'
             ? `#${frame.index} ${frame.name} (${frame.width}×${frame.height})`
             : `#${frame.index} (${formatTime(frame.time)})`;
-        item.append(image, mark, label);
-        item.addEventListener('click', () => {
-            if (state.selectionMode) {
-                frame.selected = !frame.selected;
-                item.classList.toggle('deselected', !frame.selected);
-                updateSelectionUI();
-            } else {
-                showImageModal(frame);
-            }
+        label.title = label.textContent;
+        item.append(tick, image, mark, expand, label);
+        const order = document.createElement('div');
+        order.className = 'frame-order';
+        [-1, 1].forEach(direction => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = direction < 0 ? '←' : '→';
+            button.setAttribute('aria-label', `${frame.name}を${direction < 0 ? '前' : '後'}へ移動`);
+            button.disabled = position + direction < 0 || position + direction >= frames.length;
+            button.addEventListener('click', () => {
+                stopFlipbook();
+                const next = position + direction;
+                [frames[position], frames[next]] = [frames[next], frames[position]];
+                displayPreview(frames);
+                elements.previewGallery.children[next].querySelector('img').focus();
+            });
+            order.appendChild(button);
         });
+        item.appendChild(order);
         elements.previewGallery.appendChild(item);
     });
 
     // モーダル閉じるイベント設定
     setupModal();
-}
-
-function toggleSelectionMode() {
-    state.selectionMode = !state.selectionMode;
-    elements.btnSelectionMode.setAttribute('aria-pressed', String(state.selectionMode));
-    elements.btnSelectionMode.classList.toggle('active', state.selectionMode);
-    elements.previewSection.classList.toggle('selection-mode', state.selectionMode);
-    elements.btnSelectionMode.lastChild.textContent = ` 取捨選択モード: ${state.selectionMode ? 'ON' : 'OFF'}`;
-    elements.selectionToolbar.classList.toggle('hidden', !state.selectionMode);
-    elements.previewHint.textContent = state.selectionMode
-        ? 'クリックで選択・非選択を切り替え（グレーは書き出し対象外）'
-        : 'クリックで実サイズ表示';
-    if (!state.selectionMode) closeFlipbook();
+    syncTimeline();
 }
 
 function getSelectedFrames() {
@@ -1336,49 +1391,109 @@ function updateSelectionUI() {
     elements.previewCount.textContent = `(${selectedCount} / ${total} フレーム選択)`;
     elements.selectionCount.textContent = `${selectedCount} / ${total} フレーム選択`;
     elements.btnExport.disabled = selectedCount === 0;
-    elements.btnFlipbook.disabled = selectedCount === 0;
+    elements.btnFlipbookPlay.disabled = selectedCount === 0;
+    elements.btnFlipbookClose.disabled = total === 0;
     elements.btnExportGif.disabled = selectedCount === 0;
-    updateGifEstimate();
+    const framesByIndex = new Map(state.previewFrames.map(frame => [frame.index, frame]));
+    elements.previewGallery.querySelectorAll('.preview-item').forEach(item => {
+        const selected = framesByIndex.get(Number(item.dataset.frameIndex))?.selected !== false;
+        item.classList.toggle('deselected', !selected);
+        item.querySelector('.frame-checkbox').checked = selected;
+    });
+    refreshOutput();
 }
 
 function setAllFramesSelected(selected) {
+    stopFlipbook();
     state.previewFrames.forEach(frame => { frame.selected = selected; });
     elements.previewGallery.querySelectorAll('.preview-item').forEach(item => {
         item.classList.toggle('deselected', !selected);
+        item.querySelector('input').checked = selected;
     });
     updateSelectionUI();
-    if (!selected) closeFlipbook();
 }
 
 let flipbookTimer = null;
-let flipbookIndex = 0;
 
-function openFlipbook() {
-    if (getSelectedFrames().length === 0) return;
-    flipbookIndex = 0;
-    elements.flipbookPlayer.classList.remove('hidden');
-    renderFlipbookFrame();
-    startFlipbook();
+// 表示中の画像は選択状態や並べ替えに関わらず同じオブジェクトを保持する。
+function getActivePreviewFrame() {
+    if (!state.previewFrames.includes(state.activePreviewFrame)) {
+        state.activePreviewFrame = state.previewFrames[0] || null;
+    }
+    return state.activePreviewFrame;
 }
 
-function renderFlipbookFrame() {
-    const frames = getSelectedFrames();
-    if (frames.length === 0) return closeFlipbook();
-    flipbookIndex %= frames.length;
-    const frame = frames[flipbookIndex];
-    elements.flipbookImage.src = frame.dataUrl;
-    elements.flipbookInfo.textContent = `#${frame.index} (${flipbookIndex + 1} / ${frames.length})`;
+function stepPreview(direction) {
+    stopFlipbook();
+    const frame = getActivePreviewFrame();
+    if (!frame) return;
+    const index = state.previewFrames.indexOf(frame);
+    state.activePreviewFrame = state.previewFrames[Math.max(0, Math.min(state.previewFrames.length - 1, index + direction))];
+    refreshOutput();
+}
+
+function selectPreviewFrame(index) {
+    const frame = state.previewFrames[index];
+    if (!frame) return;
+    stopFlipbook();
+    state.activePreviewFrame = frame;
+    refreshOutput();
+}
+
+function syncTimeline() {
+    const frame = getActivePreviewFrame();
+    const index = state.previewFrames.indexOf(frame);
+    elements.timelineSeek.max = Math.max(0, state.previewFrames.length - 1);
+    elements.timelineSeek.value = Math.max(0, index);
+    elements.timelineSeek.disabled = state.previewFrames.length < 2;
+    const positionText = `${index + 1} / ${state.previewFrames.length} コマ`;
+    elements.timelineSeek.setAttribute('aria-valuetext', positionText);
+    elements.timelinePositionLabel.textContent = positionText;
+    const gallery = elements.previewGallery;
+    const previous = gallery.querySelector('.is-current');
+    const current = gallery.children[index];
+    if (previous === current) return;
+    if (previous) {
+        previous.classList.remove('is-current');
+        previous.querySelector('img').removeAttribute('aria-current');
+    }
+    if (!current) return;
+    current.classList.add('is-current');
+    current.querySelector('img').setAttribute('aria-current', 'true');
+    // ページ全体は動かさず、横方向だけ再生位置に追従させる。
+    const bounds = gallery.getBoundingClientRect();
+    const itemBounds = current.getBoundingClientRect();
+    if (itemBounds.left < bounds.left) gallery.scrollLeft -= bounds.left - itemBounds.left + 8;
+    else if (itemBounds.right > bounds.right) gallery.scrollLeft += itemBounds.right - bounds.right + 8;
+}
+
+function openFlipbook() {
+    const selected = getSelectedFrames();
+    if (!selected.length) return;
+    if (!selected.includes(getActivePreviewFrame())) state.activePreviewFrame = selected[0];
+    elements.flipbookPlayer.classList.remove('hidden');
+    elements.outputPreview.classList.add('hidden');
+    refreshOutput();
+    startFlipbook();
 }
 
 function startFlipbook() {
     stopFlipbook();
-    const fps = Math.min(60, Math.max(1, Number(elements.flipbookFps.value) || 6));
-    elements.flipbookFps.value = fps;
+    const count = getSelectedFrames().length;
+    if (!count) return;
+    const fps = clampNumber(elements.gifFps.value, 1, 50, 6);
+    elements.gifFps.value = fps;
     elements.btnFlipbookPlay.textContent = '一時停止';
+    const repeat = Number(elements.gifRepeat.value);
+    let remaining = repeat === 0 ? Infinity : count * (repeat === -1 ? 1 : repeat + 1);
     flipbookTimer = setInterval(() => {
-        flipbookIndex++;
-        renderFlipbookFrame();
-    }, 1000 / fps);
+        if (--remaining <= 0) return stopFlipbook();
+        const frames = getSelectedFrames();
+        if (!frames.length) return stopFlipbook();
+        const index = frames.indexOf(state.activePreviewFrame);
+        state.activePreviewFrame = frames[(index + 1) % frames.length];
+        renderActivePreview();
+    }, gifFrameDelay(fps));
 }
 
 function stopFlipbook() {
@@ -1388,7 +1503,7 @@ function stopFlipbook() {
 }
 
 function toggleFlipbookPlayback() {
-    if (flipbookTimer === null) startFlipbook();
+    if (flipbookTimer === null) openFlipbook();
     else stopFlipbook();
 }
 
@@ -1398,7 +1513,33 @@ function restartFlipbookIfPlaying() {
 
 function closeFlipbook() {
     stopFlipbook();
+    state.activePreviewFrame = state.previewFrames[0] || null;
     elements.flipbookPlayer.classList.add('hidden');
+    elements.outputPreview.classList.remove('hidden');
+    refreshOutput();
+}
+
+function renderActivePreview() {
+    const frame = getActivePreviewFrame();
+    const index = state.previewFrames.indexOf(frame);
+    syncTimeline();
+    elements.btnPreviewPrev.disabled = index <= 0;
+    elements.btnPreviewNext.disabled = index < 0 || index >= state.previewFrames.length - 1;
+    elements.previewFrameIncluded.disabled = !frame;
+    elements.previewFrameIncluded.checked = !!frame && frame.selected !== false;
+    elements.flipbookInfo.textContent = frame ? `${index + 1} / ${state.previewFrames.length} コマ` : '';
+    if (frame) {
+        const size = getOutputSize(frame);
+        elements.outputPreviewInfo.textContent = `${frame.name} → ${size.width} × ${size.height}px${frame.selected === false ? '（除外中）' : ''}`;
+        const target = elements.flipbookPlayer.classList.contains('hidden') ? elements.outputPreview : elements.flipbookImage;
+        renderFramePreview(frame, target);
+    } else {
+        elements.outputPreview.previewRequest = (elements.outputPreview.previewRequest || 0) + 1;
+        elements.outputPreview.getContext('2d').clearRect(0, 0, elements.outputPreview.width, elements.outputPreview.height);
+        elements.outputPreviewInfo.textContent = '画像を読み込んでください';
+        elements.flipbookImage.previewRequest = (elements.flipbookImage.previewRequest || 0) + 1;
+        elements.flipbookImage.removeAttribute('src');
+    }
 }
 
 // ============================================
@@ -1447,7 +1588,7 @@ function showImageModal(frame) {
     const { imageModal, modalImage, modalInfo } = elements;
 
     // インデックスを記録（0始まりに変換）
-    currentModalIndex = frame.index - 1;
+    currentModalIndex = state.previewFrames.indexOf(frame);
 
     updateModalContent();
     imageModal.classList.remove('hidden');
@@ -1459,11 +1600,12 @@ function updateModalContent() {
 
     if (!frame) return;
 
-    modalImage.src = frame.dataUrl;
+    renderFramePreview(frame, modalImage);
+    const size = getOutputSize(frame);
     const sourceInfo = frame.sourceType === 'image'
         ? `${frame.relativePath || frame.name}`
         : `時間: ${formatTime(frame.time)}`;
-    modalInfo.textContent = `#${frame.index} / ${state.previewFrames.length} | ${sourceInfo} | サイズ: ${frame.width} × ${frame.height}px | ← → でナビゲート`;
+    modalInfo.textContent = `#${frame.index} / ${state.previewFrames.length} | ${sourceInfo} | 出力: ${size.width} × ${size.height}px | ← → でナビゲート`;
 }
 
 function showPrevImage() {
@@ -1487,33 +1629,34 @@ function closeImageModal() {
 // ============================================
 const gifEncoderModuleUrl = 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js';
 
-function initializeGifSize(frame) {
+function initializeOutputSize(frame) {
     if (!frame?.width || !frame?.height) return;
     const scale = Math.min(1, 4096 / frame.width, 4096 / frame.height);
     const width = Math.max(1, Math.round(frame.width * scale));
     const height = Math.max(1, Math.round(frame.height * scale));
-    state.gifAspectRatio = width / height;
-    elements.gifWidth.value = width;
-    elements.gifHeight.value = height;
-    elements.gifFps.value = elements.flipbookFps.value || 6;
+    state.outputAspectRatio = width / height;
+    elements.outputWidth.value = width;
+    elements.outputHeight.value = height;
+    refreshOutput();
 }
 
-function updateGifDimension(changed) {
-    let width = clampNumber(elements.gifWidth.value, 1, 4096, 480);
-    let height = clampNumber(elements.gifHeight.value, 1, 4096, 320);
-    if (elements.gifLockRatio.checked && state.gifAspectRatio > 0) {
-        if (changed === 'width') height = Math.max(1, Math.round(width / state.gifAspectRatio));
-        else width = Math.max(1, Math.round(height * state.gifAspectRatio));
+function updateOutputDimension(changed) {
+    let width = clampNumber(elements.outputWidth.value, 1, 4096, 480);
+    let height = clampNumber(elements.outputHeight.value, 1, 4096, 320);
+    if (elements.outputLockRatio.checked && state.outputAspectRatio > 0) {
+        if (changed === 'width') height = Math.max(1, Math.round(width / state.outputAspectRatio));
+        else width = Math.max(1, Math.round(height * state.outputAspectRatio));
     }
-    elements.gifWidth.value = Math.min(4096, width);
-    elements.gifHeight.value = Math.min(4096, height);
-    updateGifEstimate();
+    const scale = Math.min(1, 4096 / width, 4096 / height);
+    elements.outputWidth.value = Math.max(1, Math.round(width * scale));
+    elements.outputHeight.value = Math.max(1, Math.round(height * scale));
+    refreshOutput();
 }
 
 function syncGifFps() {
-    const fps = clampNumber(elements.gifFps.value, 1, 60, 6);
+    const fps = clampNumber(elements.gifFps.value, 1, 50, 6);
     elements.gifFps.value = fps;
-    elements.flipbookFps.value = fps;
+    document.getElementById('playback-speed-label').textContent = `${fps} fps`;
     restartFlipbookIfPlaying();
     updateGifEstimate();
 }
@@ -1521,9 +1664,10 @@ function syncGifFps() {
 function updateGifEstimate() {
     if (!elements.gifEstimate) return;
     const count = getSelectedFrames().length;
-    const width = clampNumber(elements.gifWidth.value, 1, 4096, 480);
-    const height = clampNumber(elements.gifHeight.value, 1, 4096, 320);
-    const rawBytes = width * height * 4 * count;
+    const rawBytes = getSelectedFrames().reduce((sum, frame) => {
+        const size = getOutputSize(frame);
+        return sum + size.width * size.height * 4;
+    }, 0);
     elements.gifEstimate.textContent = count > 0
         ? `${count}フレーム / 処理量 約${formatBytes(rawBytes)}`
         : '画像を選択してください';
@@ -1533,16 +1677,16 @@ async function exportGif() {
     const frames = getSelectedFrames();
     if (frames.length === 0) return;
 
-    const width = clampNumber(elements.gifWidth.value, 1, 4096, 480);
-    const height = clampNumber(elements.gifHeight.value, 1, 4096, 320);
-    const fps = clampNumber(elements.gifFps.value, 1, 60, 6);
+    const width = clampNumber(elements.outputWidth.value, 1, 4096, 480);
+    const height = clampNumber(elements.outputHeight.value, 1, 4096, 320);
+    const fps = clampNumber(elements.gifFps.value, 1, 50, 6);
     const colors = clampNumber(elements.gifColors.value, 2, 256, 256);
     const repeat = Number(elements.gifRepeat.value);
-    const delay = Math.max(20, Math.round(1000 / fps));
+    const delay = gifFrameDelay(fps);
     const rawBytes = width * height * 4 * frames.length;
 
-    elements.gifWidth.value = width;
-    elements.gifHeight.value = height;
+    elements.outputWidth.value = width;
+    elements.outputHeight.value = height;
     elements.gifFps.value = fps;
     elements.gifColors.value = colors;
     if (rawBytes > 512 * 1024 * 1024 && !window.confirm(
@@ -1570,7 +1714,7 @@ async function exportGif() {
         for (let i = 0; i < frames.length; i++) {
             if (state.gifCancelled) throw new DOMException('キャンセルされました', 'AbortError');
             const image = await loadImageElement(frames[i].dataUrl);
-            drawGifFrame(context, image, width, height);
+            drawOutputFrame(context, image, width, height);
             const imageData = context.getImageData(0, 0, width, height);
             if (elements.gifDither.checked) applyOrderedDither(imageData.data, width, height);
             const palette = quantize(imageData.data, colors, { format: 'rgb565' });
@@ -1601,11 +1745,16 @@ async function exportGif() {
     }
 }
 
-function drawGifFrame(context, image, width, height) {
+function drawOutputFrame(context, image, width, height) {
     context.save();
-    context.fillStyle = elements.gifBackground.value;
-    context.fillRect(0, 0, width, height);
-    const fit = elements.gifFit.value;
+    context.clearRect(0, 0, width, height);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    if (!elements.outputTransparent.checked || elements.exportImageFormat.value === 'gif') {
+        context.fillStyle = elements.outputBackground.value;
+        context.fillRect(0, 0, width, height);
+    }
+    const fit = elements.outputFit.value;
     if (fit === 'stretch') {
         context.drawImage(image, 0, 0, width, height);
     } else {
@@ -1681,6 +1830,11 @@ const webpRequests = new Map();
 
 function updateWebpExportOptions() {
     const isWebp = elements.exportImageFormat.value === 'webp';
+    const isGif = elements.exportImageFormat.value === 'gif';
+    document.getElementById('gif-export-panel').classList.toggle('hidden', !isGif);
+    elements.btnExport.classList.toggle('hidden', isGif);
+    elements.btnExport.textContent = `${isWebp ? 'WebP' : 'PNG'}を保存（ZIP）`;
+    refreshOutput();
     const isLossless = elements.webpMode.value === 'lossless';
     elements.webpExportOptions.classList.toggle('hidden', !isWebp);
     elements.webpQualityLabel.textContent = isLossless ? '圧縮率' : 'Quality';
@@ -1744,7 +1898,7 @@ async function exportImages() {
     if (exportFrames.length === 0) return;
 
     const format = elements.exportImageFormat.value;
-    const formatLabel = format === 'original' ? '元画像' : format.toUpperCase();
+    const formatLabel = format.toUpperCase();
     showProgress(`${formatLabel}を準備中...`, elements.btnExport);
 
     try {
@@ -1778,18 +1932,6 @@ async function exportImages() {
 
 async function prepareExportImage(frame, format, outputIndex) {
     const prefix = String(outputIndex + 1).padStart(4, '0');
-    if (format === 'original') {
-        const filename = frame.sourceType === 'image'
-            ? `${prefix}_${frame.name}`
-            : `frame_${String(frame.index).padStart(4, '0')}.png`;
-        if (frame.file) return { filename, data: frame.file };
-        return {
-            filename,
-            data: frame.dataUrl.split(',')[1],
-            options: { base64: true }
-        };
-    }
-
     const blob = await convertFrameImage(frame, format);
     const baseName = (frame.name || `frame_${String(frame.index).padStart(4, '0')}`)
         .replace(/\.[^.]+$/, '');
@@ -1802,10 +1944,11 @@ async function prepareExportImage(frame, format, outputIndex) {
 async function convertFrameImage(frame, format) {
     const image = await loadImageElement(frame.dataUrl);
     const canvas = document.createElement('canvas');
-    canvas.width = frame.width || image.naturalWidth;
-    canvas.height = frame.height || image.naturalHeight;
+    const size = getOutputSize(frame);
+    canvas.width = size.width;
+    canvas.height = size.height;
     const context = canvas.getContext('2d');
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    drawOutputFrame(context, image, canvas.width, canvas.height);
     if (format === 'webp') {
         const lossless = elements.webpMode.value === 'lossless';
         const options = {
@@ -1848,3 +1991,58 @@ function parseTime(str) {
 
 // 初期化実行
 init();
+
+// 共通の描画をプレビューとすべての出力形式で使用する。
+function getOutputSize(frame) {
+    const fixed = elements.outputSizeMode.value === 'fixed' || elements.exportImageFormat.value === 'gif';
+    return fixed
+        ? { width: clampNumber(elements.outputWidth.value, 1, 4096, 480), height: clampNumber(elements.outputHeight.value, 1, 4096, 320) }
+        : { width: frame.width, height: frame.height };
+}
+
+function gifFrameDelay(fps) {
+    // GIFの時間単位は10ms。再生確認も保存時の間隔に合わせる。
+    return Math.max(20, Math.round(100 / fps) * 10);
+}
+
+async function renderFramePreview(frame, target) {
+    const request = (target.previewRequest || 0) + 1;
+    target.previewRequest = request;
+    try {
+        const image = await loadImageElement(frame.dataUrl);
+        if (request !== target.previewRequest) return;
+        const size = getOutputSize(frame);
+        const canvas = target.tagName === 'CANVAS' ? target : document.createElement('canvas');
+        canvas.width = size.width;
+        canvas.height = size.height;
+        drawOutputFrame(canvas.getContext('2d'), image, size.width, size.height);
+        if (target !== canvas) target.src = canvas.toDataURL('image/png');
+    } catch (error) {
+        if (request === target.previewRequest) elements.outputPreviewInfo.textContent = 'プレビューを表示できませんでした。画像を読み込み直してください。';
+    }
+}
+
+function refreshOutput() {
+    const isGif = elements.exportImageFormat.value === 'gif';
+    const fixed = isGif || elements.outputSizeMode.value === 'fixed';
+    elements.outputSizeMode.disabled = isGif;
+    [elements.outputWidth, elements.outputHeight, elements.outputLockRatio, elements.outputFit].forEach(input => { input.disabled = !fixed; });
+    elements.outputTransparent.disabled = isGif;
+    elements.outputBackground.disabled = !isGif && elements.outputTransparent.checked;
+    document.getElementById('output-size-hint').textContent = isGif
+        ? 'GIFは全フレームを指定サイズに統一します。初期サイズは先頭画像を基準にしています。'
+        : fixed ? '全画像を指定サイズに統一します。収め方で余白や切り抜きを選べます。' : '各画像のピクセル数を維持します。サイズ変更には「共通サイズを指定」を選んでください。';
+    renderActivePreview();
+    if (!elements.imageModal.classList.contains('hidden')) updateModalContent();
+    updateGifEstimate();
+}
+
+function extractionSignature() {
+    return JSON.stringify([state.crop, state.timeRange, state.interval]);
+}
+
+function updateExtractionStatus() {
+    const stale = state.sourceMode === 'video' && state.previewFrames.length > 0 && state.extractionSignature !== extractionSignature();
+    document.getElementById('extraction-status').textContent = stale
+        ? '動画の抽出設定が変更されています。現在の一覧は抽出時のままです。「フレームを抽出」で一覧を作り直せます（選択・並び順はリセットされます）。' : '';
+}

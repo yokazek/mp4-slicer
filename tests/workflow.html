@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><title>連番画像ワークフロー検証</title>
+<style>body{font:16px system-ui;margin:24px}iframe{width:100%;height:850px;border:1px solid #aaa}pre{white-space:pre-wrap}</style>
+<h1>連番画像ワークフロー検証</h1>
+<p>テスト画像・短い動画をブラウザ内で生成します。保存結果はメモリ上で検証し、ダウンロードしません。</p>
+<button id="run" disabled>検証を実行</button><pre id="result"></pre>
+<iframe id="app" src="../index.html"></iframe>
+<script>
+const report = document.getElementById('result');
+document.getElementById('app').addEventListener('load', () => { document.getElementById('run').disabled = false; });
+document.getElementById('run').onclick = async () => {
+    document.getElementById('run').disabled = true;
+    report.textContent = '';
+    const w = document.getElementById('app').contentWindow;
+    const d = w.document;
+    const el = id => d.getElementById(id);
+    const assert = (condition, label) => { if (!condition) throw new Error(label); report.textContent += `PASS ${label}\n`; };
+    const set = (id, value) => { const input = el(id); if (input.type === 'checkbox') input.checked = value; else input.value = value; input.dispatchEvent(new w.Event('change', {bubbles:true})); };
+    const file = async (name, width, height, color) => {
+        const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d'); ctx.fillStyle = color; ctx.fillRect(0, 0, width, height);
+        const blob = await new Promise(resolve => canvas.toBlob(resolve));
+        return new w.File([blob], name, {type:'image/png'});
+    };
+    const readPixel = async (blob, x, y) => {
+        const bitmap = await createImageBitmap(blob);
+        const canvas = document.createElement('canvas'); canvas.width=bitmap.width; canvas.height=bitmap.height;
+        canvas.getContext('2d').drawImage(bitmap,0,0); bitmap.close();
+        return { width:canvas.width, height:canvas.height, rgba:[...canvas.getContext('2d').getImageData(x,y,1,1).data] };
+    };
+    try {
+        set('export-image-format','png'); set('output-size-mode','source'); set('output-fit','contain'); set('output-transparent',true);
+        await w.loadMediaFiles([await file('frame10.png',40,80,'#00ff00'),await file('frame2.png',80,40,'#ff0000')]);
+        assert(w.getSelectedFrames()[0].name === 'frame2.png', '自然順で画像を読み込む');
+        assert(el('export-image-format').value === 'png' && !d.querySelector('#export-image-format option[value="original"]'), '出力形式はPNGが初期値・元の形式は廃止');
+        let exported = await w.prepareExportImage(w.getSelectedFrames()[1], 'png', 1);
+        let decoded = await readPixel(exported.data,0,0);
+        assert(decoded.width === 40 && decoded.height === 80, '各画像のサイズを維持');
+        set('output-size-mode','fixed'); set('output-lock-ratio',false); set('output-width',32); set('output-height',32);
+        exported = await w.prepareExportImage(w.getSelectedFrames()[0],'png',0);
+        decoded = await readPixel(exported.data,0,0);
+        assert(decoded.width === 32 && decoded.height === 32 && decoded.rgba[3] === 0, 'PNGのリサイズと透明な余白');
+        set('output-transparent',false); set('output-background','#0000ff');
+        decoded = await readPixel((await w.prepareExportImage(w.getSelectedFrames()[0],'png',0)).data,0,0);
+        assert(decoded.rgba.join(',') === '0,0,255,255', '背景色をPNG出力に適用');
+        set('output-fit','cover');
+        decoded = await readPixel((await w.prepareExportImage(w.getSelectedFrames()[0],'png',0)).data,0,0);
+        assert(decoded.rgba.join(',') === '255,0,0,255', '中央切り抜きで余白を除去');
+        set('export-image-format','webp'); set('webp-mode','lossless');
+        decoded = await readPixel((await w.prepareExportImage(w.getSelectedFrames()[0],'webp',0)).data,0,0);
+        assert(decoded.width === 32 && decoded.rgba.join(',') === '255,0,0,255', 'WebPも共通加工を適用し実エンコーダーで保存');
+        d.querySelector('.frame-order button:last-child').click();
+        assert(w.getSelectedFrames()[0].name === 'frame10.png', '並べ替えが出力順序に反映');
+        d.querySelector('.frame-checkbox').click();
+        assert(w.getSelectedFrames().length === 1 && w.getSelectedFrames()[0].name === 'frame2.png', 'チェックで対象を選択');
+        d.querySelectorAll('.preview-item img')[1].click();
+        assert(w.getActivePreviewFrame().name === 'frame2.png' && d.querySelectorAll('.preview-item')[1].classList.contains('is-current') && el('timeline-seek').value === '1', 'タイムラインのクリックで表示コマと再生位置を同期');
+        el('timeline-seek').value = '0'; el('timeline-seek').dispatchEvent(new w.Event('input'));
+        assert(w.getActivePreviewFrame().name === 'frame10.png' && d.querySelector('.preview-item img').getAttribute('aria-current') === 'true' && w.getSelectedFrames().length === 1, 'シークで除外フレームも確認でき対象選択を維持');
+        d.querySelector('.frame-expand').click();
+        assert(!el('image-modal').classList.contains('hidden') && w.getSelectedFrames().length === 1, '拡大表示で選択を変更しない');
+        w.closeImageModal();
+        let saved;
+        w.downloadBlob = (blob, filename) => { saved = {blob,filename}; };
+        set('export-image-format','png'); await w.exportImages();
+        const zip = await w.JSZip.loadAsync(saved.blob);
+        assert(Object.keys(zip.files).length === 1 && saved.filename.endsWith('.zip'), '選択画像のみZIPに保存');
+        set('export-image-format','gif'); await w.exportGif();
+        assert(saved.filename.endsWith('.gif'), 'GIFを実エンコーダーで保存');
+        const header = new DataView(await saved.blob.arrayBuffer());
+        assert(header.getUint16(6,true) === 32 && header.getUint16(8,true) === 32, 'GIFも共通の出力サイズを使用');
+        set('export-image-format','png');
+        assert(el('output-width').value === '32' && el('output-fit').value === 'cover' && w.getSelectedFrames().length === 1, '形式切り替えで加工設定と選択を維持');
+        w.setAllFramesSelected(false);
+        assert(el('btn-export').disabled && el('btn-export-gif').disabled && el('btn-flipbook-play').disabled, '未選択時は保存・再生を無効化');
+        w.setAllFramesSelected(true);
+        el('btn-flipbook-play').click();
+        assert(!el('flipbook-player').classList.contains('hidden') && el('btn-flipbook-play').textContent === '一時停止', 'プレビュー下のボタンから再生');
+        el('btn-flipbook-play').click();
+        assert(el('btn-flipbook-play').textContent === '再生' && !el('flipbook-player').classList.contains('hidden'), '同じボタンで一時停止');
+        el('btn-flipbook-close').click();
+        assert(el('flipbook-player').classList.contains('hidden') && !el('output-preview').classList.contains('hidden'), '先頭に戻して静止画を表示');
+        el('btn-preview-next').click();
+        assert(el('output-preview-info').textContent.includes('frame2.png') && el('btn-preview-next').disabled, '次のコマで進み末尾で停止');
+        el('preview-frame-included').click();
+        assert(w.getSelectedFrames().length === 1 && !d.querySelectorAll('.frame-checkbox')[1].checked && el('output-preview-info').textContent.includes('frame2.png') && el('output-preview-info').textContent.includes('除外中'), '表示中のコマを除外し一覧と同期・表示は維持');
+        el('btn-preview-prev').click();
+        assert(el('output-preview-info').textContent.includes('frame10.png') && el('btn-preview-prev').disabled, '前のコマで戻り先頭で停止');
+        el('preview-frame-included').click();
+        assert(el('btn-export').disabled && !el('preview-frame-included').disabled && !el('btn-preview-next').disabled, '全コマ除外後も確認と復帰が可能');
+        el('btn-preview-next').click();
+        el('preview-frame-included').click();
+        assert(w.getSelectedFrames()[0].name === 'frame2.png' && d.querySelectorAll('.frame-checkbox')[1].checked, '除外したコマに移動して選択を復帰');
+        w.setAllFramesSelected(true);
+        el('btn-flipbook-play').click();
+        el('btn-preview-prev').click();
+        assert(el('btn-flipbook-play').textContent === '再生' && el('output-preview-info').textContent.includes('frame10.png'), '再生中のコマ送りは一時停止して表示');
+        el('btn-flipbook-close').click();
+        assert(!document.body.classList.contains('is-processing') && !d.body.classList.contains('is-processing'), '処理後に操作を復帰');
+        // ブラウザが生成した動画からの抽出経路も確認する。
+        const canvas = document.createElement('canvas'); canvas.width=64; canvas.height=32;
+        const ctx = canvas.getContext('2d'); ctx.fillStyle='#ff0000'; ctx.fillRect(0,0,64,32);
+        const stream = canvas.captureStream(10);
+        const recorder = new MediaRecorder(stream, {mimeType:'video/webm'});
+        const chunks=[]; recorder.ondataavailable=event=>chunks.push(event.data);
+        const stopped = new Promise(resolve=>recorder.onstop=resolve);
+        recorder.start();
+        await new Promise(resolve=>setTimeout(resolve,500));
+        ctx.fillStyle='#00ff00'; ctx.fillRect(0,0,64,32);
+        await new Promise(resolve=>setTimeout(resolve,500));
+        recorder.stop(); await stopped; stream.getTracks().forEach(track=>track.stop());
+        const metadata = new Promise(resolve=>el('video-player').addEventListener('loadedmetadata',()=>setTimeout(resolve,0),{once:true}));
+        await w.loadMediaFiles([new w.File(chunks,'test.webm',{type:'video/webm'})]); await metadata;
+        set('input-end-time','00:00.500'); set('input-start-time','00:00.200');
+        const video = el('video-player');
+        const waitFor = async predicate => {
+            const deadline = performance.now() + 3000;
+            while (!predicate()) {
+                if (performance.now() > deadline) throw new Error('動画の範囲再生がタイムアウト');
+                await new Promise(resolve => setTimeout(resolve,20));
+            }
+        };
+        el('btn-play').click();
+        assert(video.currentTime >= 0.2, '動画の範囲外から再生すると選択範囲の先頭へ移動');
+        for (let loop = 0; loop < 2; loop++) {
+            await waitFor(() => video.currentTime > 0.4);
+            await waitFor(() => video.currentTime < 0.3);
+        }
+        assert(!video.paused && video.currentTime >= 0.2, '指定範囲の終了から開始へ戻って繰り返し再生');
+        await waitFor(() => !video.paused && video.currentTime > 0.25);
+        el('btn-play').click();
+        const pausedTime = video.currentTime;
+        el('btn-play').click();
+        assert(Math.abs(video.currentTime - pausedTime) < 0.02, '範囲内の一時停止からは同じ位置で再開');
+        video.pause();
+        await new Promise(resolve => setTimeout(resolve,350));
+        assert(video.paused && Math.abs(video.currentTime - pausedTime) < 0.02, 'ループ再生も一時停止でき停止位置を維持');
+        set('input-end-time','00:02.000');
+        let reachedVideoEnd = false;
+        video.addEventListener('ended', () => { reachedVideoEnd = true; }, {once:true});
+        el('btn-play').click();
+        await waitFor(() => reachedVideoEnd && video.currentTime < 0.4 && !video.paused);
+        assert(!video.paused, '動画ファイルの末尾に達した場合も範囲の開始へ戻って再生');
+        video.pause();
+        // MediaRecorderのWebMには有限のdurationがない場合があるため、明示範囲で抽出する。
+        el('input-start-time').value='00:00.000'; el('input-start-time').dispatchEvent(new w.Event('change'));
+        el('input-end-time').value='00:00.500'; el('input-end-time').dispatchEvent(new w.Event('change'));
+        set('interval-value','0.25');
+        await w.generatePreview();
+        assert(w.getSelectedFrames().length === 2, '動画から指定間隔で連番画像を抽出');
+        set('interval-value','0.5');
+        assert(el('extraction-status').textContent.includes('変更') && w.getSelectedFrames().length === 2, '設定変更時に再抽出案内を表示し、一覧を維持');
+        await w.loadMediaFiles(await Promise.all(Array.from({length:12}, (_, i) => file(`frame${i+1}.png`,80,40,i % 2 ? '#00ff00' : '#ff0000'))));
+        const gallery = el('preview-gallery');
+        const cards = gallery.querySelectorAll('.preview-item');
+        assert(gallery.scrollWidth > gallery.clientWidth && cards[0].offsetTop === cards[11].offsetTop, '多数のフレームを折り返さず横スクロール表示');
+        cards[11].querySelector('img').click();
+        assert(gallery.scrollLeft > 0 && cards[11].getBoundingClientRect().right <= gallery.getBoundingClientRect().right + 1, '末尾の表示コマまでタイムラインが自動追従');
+        el('btn-flipbook-close').click();
+        cards[1].querySelector('.frame-checkbox').click();
+        set('gif-fps','1');
+        el('btn-flipbook-play').click();
+        await new Promise(resolve => setTimeout(resolve,1100));
+        el('btn-flipbook-play').click();
+        assert(cards[2].classList.contains('is-current') && el('timeline-seek').value === '2' && el('timeline-position-label').textContent === '3 / 12 コマ', '再生時は除外コマを飛ばして現在位置マーカーとスライダーを更新');
+        report.textContent += 'すべて成功\n';
+    } catch (error) { report.textContent += `FAIL ${error.stack}\n`; }
+    finally { document.getElementById('run').disabled = false; }
+};
+</script></html>

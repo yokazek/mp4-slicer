@@ -1,6 +1,6 @@
 # mp4 Slicer
 
-A modern, browser-based tool to extract high-quality PNG frames from MP4 videos. Process everything locally in your browser—no server uploads required.
+A browser tool for extracting image sequences from videos, batch processing images, and exporting PNG, WebP, or GIF. Start with a video or an existing image folder. Media processing stays in your browser.
 
 Page: https://yokazek.github.io/mp4-slicer/
 
@@ -16,10 +16,11 @@ Page: https://yokazek.github.io/mp4-slicer/
   - Select start and end points using visual range handles.
   - Manual timestamp input for millisecond precision.
 - **Flexible Interval**: Set the extraction interval (e.g., every 0.5s or 1.0s).
-- **Image-to-GIF Workflow**: Import multiple images or a folder, select frames, preview the animation, and export a resized and color-reduced animated GIF.
+- **Shared Image Editing**: Import images in natural order, select them with checkboxes, reorder them, and apply size, fit, and background settings across PNG, WebP, and GIF. Original images are retained for further edits. Preview processed stills or animations before compression and color reduction.
+- **GIF Export**: Set playback speed, loops, colors, and dithering. GIF uses a common canvas size and a solid background; transparent output is available for PNG and WebP. GIF playback intervals are rounded to 10 ms.
 - **Batch Export**: 
   - Preview frames before exporting.
-  - Download selected frames as original files, PNG, or WebP in a single ZIP file.
+  - Download selected frames as PNG or WebP in a single ZIP file, with filenames reflecting their order.
   - Configure lossy/lossless mode, quality, and effort for WebP output.
   - WebP conversion runs in a Web Worker with a fixed progress display at the bottom of the viewport.
 - **Modern UI**: 
@@ -29,13 +30,18 @@ Page: https://yokazek.github.io/mp4-slicer/
 
 ## 🚀 Quick Start
 
-1. Open `index.html` in any modern web browser.
-2. Drag and drop an MP4 file into the upload area.
-3. Adjust the crop area and time range.
-4. Click **Generate Preview** to check the frames.
-5. Click **Download PNGs (ZIP)** to save your results.
+1. Open the hosted page, or run `python -m http.server 8765 --bind 127.0.0.1` in this directory and open `http://127.0.0.1:8765/`. HTTP is required for the WebP worker.
+2. Drop a video, image sequence, or image folder into the shared import area. The file picker accepts both videos and images.
+3. Adjust the crop area and time range. Video playback loops within the selected range, returning to its start at the end. Pausing within the range resumes from that position.
+4. Extract frames, then select and reorder them.
+5. Apply shared processing settings and inspect the output preview. Step backward/forward through all frames, or play only included frames. Uncheck the displayed frame to exclude it, and check it again to restore it; the gallery stays in sync. Stepping pauses playback. These controls sit below the preview; select-all and deselect-all sit directly above the frame list. The horizontal timeline highlights and follows the current frame during playback. Click a thumbnail or use the position slider to seek; use the expand button for a larger view.
+6. Choose PNG, WebP, or GIF in the export panel and save.
 
-To create a GIF from images, drop image files or a folder onto the image area, select the desired frames, and configure the GIF settings.
+Import existing images or a folder to go directly to editing. Changing extraction settings shows a notice while keeping the existing frames; extracting again resets the selection and order.
+
+## Verification
+
+Open `/tests/workflow.html` on the local server and run the checks. Generated images and a short video exercise PNG/WebP/GIF encoding, ZIP output, selection, ordering, and extraction notices. The existing CDN libraries require a network connection on first load.
 
 ## 🛠️ Built With
 
